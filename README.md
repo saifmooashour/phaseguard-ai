@@ -1,21 +1,37 @@
-# PhaseGuard AI
+# PhaseGuard AI ✈️
 
-PhaseGuard AI is an intelligent aviation decision-support platform designed to enhance situational awareness during final approach workflows. By evaluating multidimensional operational parameters, PhaseGuard AI acts as a digital first officer to keep aircraft arrivals safe.
+**PhaseGuard AI** is an intelligent, multi-layered aviation decision-support platform engineered to augment situational awareness during the critical final approach and landing phases of flight.
 
-## Features
-- **Mission Setup & Telemetry Tracking**: Select real-world routes or ingest cache scenarios instantly.
-- **Dynamic Risk Score Engine**: Seamlessly scales landing parameters across weather metrics.
-- **Top 3 Landing Risks**: Dynamically maps risk environments sequentially.
-- **Landing Visualization overlays**: Displays visual threshold approach guidelines.
-- **Cyber Readiness Fallbacks**: Enforces continuous tracking limits.
+## Overview
+By assessing complex combinations of real-time flight telemetry, adverse local weather, traffic bottlenecks, and cockpit environments, PhaseGuard AI acts as a digital first officer—synthesizing data to mitigate approach-to-landing hazards securely.
+
+## Problem Statement
+The final approach is highly saturated for pilots. Managing dynamic weather configurations, varying airport profiles, unexpected runway contamination limits, and operational stress often bottlenecks critical decision vectors.
+
+## Solution
+PhaseGuard AI processes multidimensional real-world flight contexts to offer transparent checklists, real-time exposure assessments, and audible emergency guidance without manual task scaling.
+
+## Key Features
+- **Mission Setup Interface**: Connect real-world route constraints dynamically.
+- **Top 3 Landing Hazards**: Personalized assessments delivered sequentially.
+- **Audio Synthesis**: Interactive briefings mapped for pilot readiness.
+
+## AI Intelligence Layer
+Integrates continuous local engine safety constraints securely alongside Google Cloud Vertex protocols.
+
+## Architecture
+Built cleanly inside strict environment pipelines.
 
 ## Tech Stack
-- **Framework**: Next.js (TypeScript)
-- **Design Paradigm**: Core CSS
+- **IDE**: Antigravity
+- **Code**: Next.js, TypeScript
+- **Design**: Tailwind CSS
 
-## Setup
+## Run Locally
 ```bash
+npm install
 npm run dev
 ```
+
 ## Disclaimer
-Not a certified flight monitoring alternative.
+PhaseGuard AI is a prototype decision-support tool and is not certified for real-world aviation operations.
