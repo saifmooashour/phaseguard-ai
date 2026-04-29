@@ -1,0 +1,51 @@
+export function calculateRisk({ runway, traffic, workload, aircraft }: any) {
+  let score = 0
+  const risks: string[] = []
+
+  if (runway === 'Wet') {
+    score += 20
+    risks.push('Wet runway may increase landing distance')
+  }
+
+  if (runway === 'Contaminated') {
+    score += 40
+    risks.push('Contaminated runway creates high stopping-distance risk')
+  }
+
+  if (traffic === 'Medium') {
+    score += 15
+    risks.push('Moderate traffic may increase ATC workload')
+  }
+
+  if (traffic === 'High') {
+    score += 30
+    risks.push('High traffic reduces decision time')
+  }
+
+  if (workload === 'Medium') {
+    score += 15
+    risks.push('Crew workload is elevated')
+  }
+
+  if (workload === 'High') {
+    score += 30
+    risks.push('High crew workload may increase cognitive overload')
+  }
+
+  if (aircraft === 'Minor Issue') {
+    score += 25
+    risks.push('Aircraft has a minor operational limitation')
+  }
+
+  let level = 'Low'
+
+  if (score >= 80) level = 'Critical'
+  else if (score >= 55) level = 'High'
+  else if (score >= 25) level = 'Medium'
+
+  return {
+    score: Math.min(score, 100),
+    level,
+    topRisks: risks.slice(0, 3),
+  }
+}
