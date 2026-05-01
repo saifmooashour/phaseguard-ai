@@ -1,21 +1,33 @@
 import { NextResponse } from 'next/server';
-import { VertexAI } from '@google-cloud/vertexai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-    
-    const projectId = process.env.GOOGLE_CLOUD_PROJECT;
-    const location = process.env.GOOGLE_CLOUD_LOCATION || 'us-central1';
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 25000);
 
-    if (!projectId) {
-       return NextResponse.json({ 
-         risks: generateFallbackRisks(body)
-       }, { status: 200 });
+  let body: any = {};
+  try {
+    body = await request.json();
+  } catch (e) {
+    console.error('Failed to parse request body:', e);
+  }
+
+  try {
+    const apiKey = process.env.GEMINI_API_KEY;
+
+    if (!apiKey) {
+      clearTimeout(timeoutId);
+      console.error('GEMINI_API_KEY is missing from environment.');
+      return NextResponse.json({ 
+        success: false,
+        fallback: true,
+        message: "AI unavailable, using fallback logic",
+        data: { risks: generateFallbackRisks(body), source: 'FALLBACK' }
+      });
     }
 
-    const vertexAI = new VertexAI({ project: projectId, location: location });
-    const generativeModel = vertexAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
     const prompt = `
 You are an expert aviation risk evaluator for PhaseGuard AI.
@@ -38,18 +50,30 @@ Requirements:
 }
 `;
 
-    const response = await generativeModel.generateContent(prompt);
-    let text = response.response.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+    const result = await model.generateContent(prompt);
+    
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('TIMEOUT')), 25000);
+    });
+
+    const responseResult: any = await Promise.race([
+      result.response,
+      timeoutPromise
+    ]);
+
+    clearTimeout(timeoutId);
+
+    let text = responseResult.text() || "{}";
     
     // Clean up potential markdown formatting from LLM response
-    if (text.startsWith('\`\`\`json')) {
+    if (text.startsWith('```json')) {
       text = text.substring(7);
-      if (text.endsWith('\`\`\`')) {
+      if (text.endsWith('```')) {
         text = text.substring(0, text.length - 3);
       }
-    } else if (text.startsWith('\`\`\`')) {
+    } else if (text.startsWith('```')) {
       text = text.substring(3);
-      if (text.endsWith('\`\`\`')) {
+      if (text.endsWith('```')) {
         text = text.substring(0, text.length - 3);
       }
     }
@@ -57,32 +81,39 @@ Requirements:
     try {
       const data = JSON.parse(text.trim());
       if (Array.isArray(data.risks) && data.risks.length >= 3) {
-        return NextResponse.json({ risks: data.risks.slice(0, 3), source: 'GEMINI' });
+        return NextResponse.json({
+          success: true,
+          fallback: false,
+          message: "AI analysis completed",
+          data: { risks: data.risks.slice(0, 3), source: 'GEMINI' }
+        });
       }
     } catch (parseError) {
       console.error("Failed to parse Gemini response for Top Risks", parseError);
     }
 
-    return NextResponse.json({ risks: generateFallbackRisks(body), source: 'FALLBACK' });
+    return NextResponse.json({
+      success: false,
+      fallback: true,
+      message: "AI response format error, using fallback logic",
+      data: { risks: generateFallbackRisks(body), source: 'FALLBACK' }
+    });
 
   } catch (error: any) {
-    console.error('\n=== VERTEX AI TOP RISKS EVALUATOR ERROR ===');
+    clearTimeout(timeoutId);
+    const isTimeout = error.message === 'TIMEOUT' || error.name === 'AbortError';
+    console.error(`\n=== GEMINI AI TOP RISKS EVALUATOR ERROR (${isTimeout ? 'TIMEOUT' : 'GENERAL'}) ===`);
     console.error(error);
     
-    // Attempt dynamic fallback
-    try {
-      const body = await request.clone().json();
-      return NextResponse.json({ risks: generateFallbackRisks(body), source: 'FALLBACK' });
-    } catch {
-      return NextResponse.json({ 
-        risks: [
-          "Elevated baseline risk factors during final approach vectors.",
-          "Cockpit task saturation requiring focused standard procedures.",
-          "Dynamic environment requiring active monitoring."
-        ],
-        source: 'FALLBACK_HARDCODED'
-      });
-    }
+    return NextResponse.json({
+      success: false,
+      fallback: true,
+      message: isTimeout ? "AI request timed out, using fallback logic" : "AI unavailable, using fallback logic",
+      data: { 
+        risks: generateFallbackRisks(body), 
+        source: isTimeout ? 'FALLBACK_TIMEOUT' : 'FALLBACK_ERROR' 
+      }
+    });
   }
 }
 
@@ -125,3 +156,4 @@ function generateFallbackRisks(body: any): string[] {
 
   return risks.slice(0, 3);
 }
+

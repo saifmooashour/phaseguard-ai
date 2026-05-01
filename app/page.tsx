@@ -60,18 +60,18 @@ export default function Home() {
   const [aiRiskResult, setAiRiskResult] = useState<any | null>(null)
   const [isGeneratingAiRisk, setIsGeneratingAiRisk] = useState(false)
 
-  // AI Scenario Video state
-  const [videoResult, setVideoResult] = useState<{ source: string, operationName?: string, message: string, outputUri?: string, videoUrl?: string } | null>(null)
-  const [isGeneratingVideo, setIsGeneratingVideo] = useState(false)
-  const [isCheckingVideo, setIsCheckingVideo] = useState(false)
 
   // Cyber-Operational Exposure state
   const [cyberIndicator, setCyberIndicator] = useState<any | null>(null)
   const [isGeneratingCyber, setIsGeneratingCyber] = useState(false)
 
   // Dynamic Landing Risks state
-  const [dynamicRisks, setDynamicRisks] = useState<{ risks: string[], source: string } | null>(null)
+  const [dynamicRisks, setDynamicRisks] = useState<{ risks: string[], source: string, _fallback?: boolean } | null>(null)
   const [isGeneratingTopRisks, setIsGeneratingTopRisks] = useState(false)
+
+  // Global App Loading state for smoother UX transitions
+  const [isAppLoading, setIsAppLoading] = useState(false)
+  const [loadingMessage, setLoadingMessage] = useState("")
 
   // Google Maps State
   const mapRef = useRef<HTMLDivElement>(null);
@@ -166,7 +166,7 @@ export default function Home() {
   }, [mapLoaded, airportProfile, selectedFlight, appScreen]);
 
   const getOperationalRecommendation = () => {
-    return aiRiskResult && !aiRiskResult.error ? {
+    return aiRiskResult && !aiRiskResult._error ? {
       primaryRecommendation: aiRiskResult.decision === 'CAUTION' ? 'PROCEED_WITH_CAUTION' : aiRiskResult.decision,
       alternativeRecommendation: aiRiskResult.decision === 'GO' ? 'Monitor conditions' : aiRiskResult.decision === 'CAUTION' ? 'Hold or Divert if conditions worsen' : 'Divert',
       operationalReasoning: aiRiskResult.topRisks || [],
@@ -220,7 +220,7 @@ export default function Home() {
       const opRec = getOperationalRecommendation();
       if (opRec) {
         const flightInfo = selectedFlight ? `Flight ${selectedFlight.flightNumber} to ${airport}.` : `Mission to ${airport}.`;
-        const scoreInfo = `Risk Score: ${aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result.score}.`;
+        const scoreInfo = `Risk Score: ${aiRiskResult && !aiRiskResult._error ? aiRiskResult.overallRiskScore : result.score}.`;
         const decisionText = opRec.primaryRecommendation.replace(/_/g, ' ');
         const hazards = (dynamicRisks?.risks || opRec.operationalReasoning).length > 0 ? `Top hazards: ${(dynamicRisks?.risks || opRec.operationalReasoning).slice(0, 3).join(', ')}.` : '';
         const actions = opRec.pilotActions.length > 0 ? `Recommended actions: ${opRec.pilotActions.slice(0, 2).join(', ')}.` : '';
@@ -256,19 +256,19 @@ export default function Home() {
         body: JSON.stringify({
           airport: airport,
           runway, traffic, workload, aircraft, visibilityCategory, windCategory, weatherCondition,
-          aiRiskScore: aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : undefined,
-          aiDecision: aiRiskResult && !aiRiskResult.error ? aiRiskResult.decision : undefined,
-          aiConfidence: aiRiskResult && !aiRiskResult.error ? aiRiskResult.confidence : undefined,
-          aiTopRisks: aiRiskResult && !aiRiskResult.error ? aiRiskResult.topRisks : undefined,
-          aiRecommendations: aiRiskResult && !aiRiskResult.error ? aiRiskResult.recommendations : undefined,
-          aiExplanation: aiRiskResult && !aiRiskResult.error ? aiRiskResult.explanation : undefined,
-          factorScores: aiRiskResult && !aiRiskResult.error ? aiRiskResult.factorScores : undefined,
-          missingDataWarnings: aiRiskResult && !aiRiskResult.error ? aiRiskResult.missingDataWarnings : undefined,
-          score: (!aiRiskResult || aiRiskResult.error) ? result.score : undefined,
-          level: (!aiRiskResult || aiRiskResult.error) ? result.level : undefined,
-          decision: (!aiRiskResult || aiRiskResult.error) ? result.decision : undefined,
-          topRisks: (!aiRiskResult || aiRiskResult.error) ? result.topRisks : undefined,
-          recommendations: (!aiRiskResult || aiRiskResult.error) ? result.recommendations : undefined,
+          aiRiskScore: aiRiskResult && !aiRiskResult._error ? aiRiskResult.overallRiskScore : undefined,
+          aiDecision: aiRiskResult && !aiRiskResult._error ? aiRiskResult.decision : undefined,
+          aiConfidence: aiRiskResult && !aiRiskResult._error ? aiRiskResult.confidence : undefined,
+          aiTopRisks: aiRiskResult && !aiRiskResult._error ? aiRiskResult.topRisks : undefined,
+          aiRecommendations: aiRiskResult && !aiRiskResult._error ? aiRiskResult.recommendations : undefined,
+          aiExplanation: aiRiskResult && !aiRiskResult._error ? aiRiskResult.explanation : undefined,
+          factorScores: aiRiskResult && !aiRiskResult._error ? aiRiskResult.factorScores : undefined,
+          missingDataWarnings: aiRiskResult && !aiRiskResult._error ? aiRiskResult.missingDataWarnings : undefined,
+          score: (!aiRiskResult || aiRiskResult._error) ? result.score : undefined,
+          level: (!aiRiskResult || aiRiskResult._error) ? result.level : undefined,
+          decision: (!aiRiskResult || aiRiskResult._error) ? result.decision : undefined,
+          topRisks: (!aiRiskResult || aiRiskResult._error) ? result.topRisks : undefined,
+          recommendations: (!aiRiskResult || aiRiskResult._error) ? result.recommendations : undefined,
           flightNumber: selectedFlight?.flightNumber,
           airline: selectedFlight?.airline,
           departureIata: selectedFlight?.departureIata,
@@ -277,7 +277,7 @@ export default function Home() {
           scheduledTime: selectedFlight?.scheduledTime,
           estimatedTime: selectedFlight?.estimatedTime,
           flightAircraft: selectedFlight?.aircraft,
-          aiRiskResult: aiRiskResult && !aiRiskResult.error ? aiRiskResult : undefined,
+          aiRiskResult: aiRiskResult && !aiRiskResult._error ? aiRiskResult : undefined,
           operationalRecommendation: getOperationalRecommendation(),
           selectedFlight,
           selectedAirport: airportProfile,
@@ -288,16 +288,13 @@ export default function Home() {
         signal: controller.signal
       });
       clearTimeout(timeoutId);
-      const text = await res.text();
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch (err) {
-        console.error("Briefing API returned non-JSON response", err);
-        throw new Error("Invalid JSON");
+      const json = await res.json();
+      
+      if (json.fallback) {
+        setGeminiBriefing(json.data.briefing + "\n\n(AI fallback mode active)");
+      } else {
+        setGeminiBriefing(json.data.briefing);
       }
-      if (!res.ok) throw new Error(data?.error || 'Failed to generate briefing');
-      setGeminiBriefing(data.briefing);
     } catch (e) {
       clearTimeout(timeoutId);
       console.error("Briefing error", e);
@@ -344,17 +341,18 @@ export default function Home() {
   };
 
   const runAnalysisWithParams = async (params: any) => {
+    setIsAppLoading(true)
+    setLoadingMessage("Synthesizing Mission Intelligence...")
     setStarted(true)
     setResult(null)
     setGeminiBriefing(null)
     setAiRiskResult(null)
-    setVideoResult(null)
     setDynamicRisks(null)
 
     const dataSources = {
       flight: selectedFlight ? (flightsState?.source || 'LIVE').toUpperCase() : 'NOT_CONNECTED',
       weather: weatherData ? weatherData.source.toUpperCase() : 'MANUAL',
-      traffic: 'MANUAL', // Assuming traffic is manual unless a live API is integrated
+      traffic: 'MANUAL', 
       airport: 'LOCAL DATASET',
       manualOverride: 'ACTIVE'
     }
@@ -382,10 +380,12 @@ export default function Home() {
     setResult(riskResult)
 
     setIsSaving(true)
+    setLoadingMessage("Finalizing Operational Matrix...")
     await new Promise(resolve => setTimeout(resolve, 800));
     setIsSaving(false)
     setCyberIndicator(null)
     setAppScreen('dashboard')
+    setIsAppLoading(false)
   }
 
   const loadScenario = (type: ScenarioType) => {
@@ -435,7 +435,6 @@ export default function Home() {
     setResult(null);
     setGeminiBriefing(null);
     setAiRiskResult(null);
-    setVideoResult(null);
     setWorkflowStep(1);
     setAppScreen('setup');
   }
@@ -528,64 +527,21 @@ export default function Home() {
         });
         clearTimeout(riskTimeout);
 
-        const text = await res.text();
-        let data;
-        try {
-          data = JSON.parse(text);
-        } catch (err) {
-          console.error("AI Risk API returned non-JSON response", err);
-          throw new Error("Invalid JSON");
-        }
-        if (!res.ok) {
-          throw new Error(data?.error || 'Failed to generate AI Risk');
-        }
-        setAiRiskResult({ ...data, _dataSources: dataSources });
+        const json = await res.json();
+        setAiRiskResult({ ...json.data, _dataSources: dataSources, _fallback: json.fallback, _message: json.message });
       } catch (e: any) {
         clearTimeout(riskTimeout);
-        if (e.name === 'AbortError') {
-          console.log("AI Risk Assessment timed out. Falling back to local rules.");
-        } else {
-          console.error("AI Risk Evaluator Error", e);
-        }
-        setAiRiskResult({ error: true });
+        console.error("AI Risk Assessment Error", e);
+        setAiRiskResult({ _error: true });
       }
     } catch (e) {
-      console.error("AI Risk Assessment Error", e);
-      setAiRiskResult({ error: true });
+      console.error("AI Risk Assessment Data Prep Error", e);
+      setAiRiskResult({ _error: true });
     } finally {
       setIsGeneratingAiRisk(false);
     }
   };
 
-  const handleGenerateVideo = async () => {
-    if (!result) return;
-    setIsGeneratingVideo(true);
-    setVideoResult(null);
-    try {
-      const res = await fetch('/api/scenario-video', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          flight: selectedFlight,
-          airport: airportProfile,
-          weather: weatherData,
-          aiRiskResult: aiRiskResult,
-          operationalRecommendation: getOperationalRecommendation(),
-          dataSources: aiRiskResult?._dataSources || result?.dataSources || {}
-        })
-      });
-      const data = await res.json();
-      setVideoResult(data);
-    } catch (e) {
-      console.error("Video Generation Error", e);
-      setVideoResult({
-        source: "UNAVAILABLE",
-        message: "AI scenario video generation is not available in this project. Local Mission Replay remains active."
-      });
-    } finally {
-      setIsGeneratingVideo(false);
-    }
-  };
 
   const handleGenerateCyberIndicator = async () => {
     if (!result) return;
@@ -600,7 +556,7 @@ export default function Home() {
         trafficLevel: traffic,
         crewWorkload: workload,
         aircraftStatus: aircraft,
-        currentRiskScore: aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result.score,
+        currentRiskScore: aiRiskResult && !aiRiskResult._error ? aiRiskResult.overallRiskScore : result.score,
         top3Risks: getTop3Risks()
       };
 
@@ -612,15 +568,8 @@ export default function Home() {
       });
       clearTimeout(timeoutId);
       
-      const text = await res.text();
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch (err) {
-        console.error("Cyber API returned non-JSON response", err);
-        throw new Error("Invalid JSON");
-      }
-      setCyberIndicator(data);
+      const json = await res.json();
+      setCyberIndicator({ ...json.data, _fallback: json.fallback });
     } catch (e) {
       clearTimeout(timeoutId);
       console.error("Cyber Evaluator Error", e);
@@ -628,7 +577,8 @@ export default function Home() {
         score: 25, 
         level: 'Low', 
         summary: 'Fallback cyber assessment.', 
-        actions: ["Monitor systems", "Verify communication"] 
+        actions: ["Monitor systems", "Verify communication"],
+        _fallback: true 
       });
     } finally {
       setIsGeneratingCyber(false);
@@ -648,7 +598,7 @@ export default function Home() {
         trafficLevel: traffic,
         crewWorkload: workload,
         aircraftStatus: aircraft,
-        currentRiskScore: aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result.score,
+        currentRiskScore: aiRiskResult && !aiRiskResult._error ? aiRiskResult.overallRiskScore : result.score,
         top3Risks: getTop3Risks()
       };
 
@@ -660,48 +610,17 @@ export default function Home() {
       });
       clearTimeout(timeoutId);
       
-      const text = await res.text();
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch (err) {
-        console.error("Top Risks API returned non-JSON response", err);
-        throw new Error("Invalid JSON");
-      }
-      setDynamicRisks(data);
+      const json = await res.json();
+      setDynamicRisks({ ...json.data, _fallback: json.fallback });
     } catch (e: any) {
       clearTimeout(timeoutId);
-      if (e.name === 'AbortError') {
-        console.log("Top Risks evaluation timed out.");
-      } else {
-        console.error("Top Risks Error", e);
-      }
-      setDynamicRisks({ risks: getTop3Risks(), source: 'FALLBACK' });
+      console.error("Top Risks Error", e);
+      setDynamicRisks({ risks: getTop3Risks(), source: 'FALLBACK', _fallback: true });
     } finally {
       setIsGeneratingTopRisks(false);
     }
   };
 
-  const handleCheckVideoStatus = async () => {
-    if (!videoResult?.operationName) return;
-    setIsCheckingVideo(true);
-    try {
-      const res = await fetch(`/api/scenario-video/status?operationName=${encodeURIComponent(videoResult.operationName)}`);
-      const data = await res.json();
-      
-      setVideoResult(prev => prev ? {
-        ...prev,
-        source: data.source,
-        message: data.message,
-        outputUri: data.outputUri,
-        videoUrl: data.videoUrl
-      } : null);
-    } catch (e) {
-      console.error("Video Check Error", e);
-    } finally {
-      setIsCheckingVideo(false);
-    }
-  };
 
   const fetchRecentAssessments = async () => {
     const controller = new AbortController();
@@ -732,7 +651,6 @@ export default function Home() {
       operationalRecommendation: opRec,
       weatherData: weatherData,
       trafficData: { trafficLevel: traffic },
-      dataSources: aiRiskResult?._dataSources || result?.dataSources || {},
       geminiBriefing: geminiBriefing
     }
 
@@ -915,6 +833,23 @@ export default function Home() {
         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-20 mix-blend-overlay"></div>
       </div>
 
+      {/* GLOBAL LOADING OVERLAY */}
+      {isAppLoading && (
+        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="relative">
+            <div className="absolute inset-0 bg-cyan-500/20 rounded-full blur-3xl animate-pulse"></div>
+            <svg className="w-20 h-20 text-cyan-500 animate-spin relative" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+          </div>
+          <div className="mt-8 text-center">
+            <div className="text-sm font-black text-white uppercase tracking-[0.3em] animate-pulse mb-2">PhaseGuard Engine Active</div>
+            <div className="text-[10px] text-cyan-400 font-bold uppercase tracking-widest">{loadingMessage}</div>
+          </div>
+        </div>
+      )}
+
       <div className="relative z-10 max-w-[1400px] mx-auto px-4 py-8 sm:px-6 lg:px-8 flex flex-col flex-grow w-full">
 
         {/* Global Navigation Bar */}
@@ -940,63 +875,100 @@ export default function Home() {
 
         {/* SCREEN 1: START SCREEN */}
         {appScreen === 'start' && (
-          <div className="flex flex-col items-center justify-center flex-grow py-12 text-center animate-in fade-in slide-in-from-bottom-4">
-            <h1 className="text-5xl sm:text-7xl font-black tracking-tighter text-white mb-6">
-              Landing Risk Intelligence
-            </h1>
-            <p className="text-slate-400 max-w-2xl text-lg sm:text-xl mb-12 leading-relaxed">
-              Analyze airport, weather, traffic, aircraft, and workload conditions to support landing risk decisions.
-            </p>
-            <button
-              onClick={handleStartNewMission}
-              className="bg-cyan-600 hover:bg-cyan-500 text-white px-8 py-4 rounded-full text-sm font-bold uppercase tracking-widest shadow-[0_0_30px_rgba(8,145,178,0.4)] transition-all transform hover:scale-105"
-            >
-              Start New Analysis
-            </button>
-
-            <div className="mt-16 bg-slate-900/60 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-6 shadow-2xl max-w-2xl w-full">
-              <h3 className="text-xs font-bold text-slate-300 uppercase tracking-widest mb-4 flex justify-center items-center">
-                <svg className="w-4 h-4 mr-2 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg>
-                Quick Scenario Lab
-              </h3>
-              <div className="flex flex-wrap gap-3 justify-center">
-                {(['Normal', 'Rainy', 'High Traffic', 'Storm', 'Critical'] as ScenarioType[]).map(type => (
-                  <button
-                    key={type}
-                    onClick={() => { loadScenario(type); setAppScreen('dashboard'); }}
-                    className="text-xs px-4 py-2 rounded-lg font-medium bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700 hover:text-white transition-all"
-                  >
-                    {type}
-                  </button>
-                ))}
+          <div className="flex flex-col items-center justify-center flex-grow py-12 text-center animate-in fade-in slide-in-from-bottom-8 duration-700">
+            {/* Centered Premium Visual */}
+            <div className="relative mb-12 group">
+              <div className="absolute inset-0 bg-cyan-500/20 rounded-full blur-[60px] group-hover:bg-cyan-500/30 transition-all duration-1000 scale-150"></div>
+              <div className="relative bg-slate-900/40 backdrop-blur-3xl border border-slate-700/50 p-8 rounded-full shadow-2xl transition-transform duration-700 group-hover:scale-105">
+                <svg className="w-24 h-24 text-cyan-400 opacity-80" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>
+                </svg>
               </div>
             </div>
 
-            {recentAssessments.length > 0 && (
-              <div className="mt-12 w-full max-w-4xl">
-                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-6 flex items-center justify-center">
-                  <svg className="w-4 h-4 mr-2 text-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                  Recent Assessments
+            <h1 className="text-6xl sm:text-8xl font-black tracking-tighter text-white mb-6 bg-gradient-to-b from-white to-slate-500 bg-clip-text text-transparent">
+              PhaseGuard AI
+            </h1>
+            <p className="text-slate-400 max-w-2xl text-lg sm:text-2xl mb-12 leading-relaxed font-light">
+              Precision Aviation Landing Risk Intelligence. <br/>
+              <span className="text-cyan-500/80 font-medium">Real-time telemetry, AI-driven safety synthesis.</span>
+            </p>
+            
+            <div className="flex flex-col sm:flex-row gap-6 items-center justify-center mt-12">
+              <button
+                onClick={handleStartNewMission}
+                className="group relative bg-cyan-600 hover:bg-cyan-500 text-white px-12 py-6 rounded-full text-sm font-black uppercase tracking-[0.25em] shadow-[0_0_50px_rgba(8,145,178,0.4)] transition-all overflow-hidden scale-110 active:scale-100"
+              >
+                <span className="relative z-10">Initialize New Mission</span>
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+              </button>
+            </div>
+
+            {/* DEMO PRESETS */}
+            <div className="mt-16 grid grid-cols-1 sm:grid-cols-3 gap-4 w-full max-w-3xl px-4">
+              <button 
+                onClick={() => loadScenario('Normal')}
+                className="bg-slate-900/60 border border-emerald-500/30 hover:border-emerald-500 p-4 rounded-2xl transition-all group"
+              >
+                <div className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">Preset: Nominal</div>
+                <div className="text-xs text-slate-400 font-medium">Standard VFR, Low Risk</div>
+              </button>
+              <button 
+                onClick={() => loadScenario('Rainy')}
+                className="bg-slate-900/60 border border-orange-500/30 hover:border-orange-500 p-4 rounded-2xl transition-all group"
+              >
+                <div className="text-[10px] font-black text-orange-400 uppercase tracking-widest mb-1">Preset: Deteriorating</div>
+                <div className="text-xs text-slate-400 font-medium">Wet Runway, High Traffic</div>
+              </button>
+              <button 
+                onClick={() => loadScenario('Critical')}
+                className="bg-slate-900/60 border border-red-500/30 hover:border-red-500 p-4 rounded-2xl transition-all group"
+              >
+                <div className="text-[10px] font-black text-red-400 uppercase tracking-widest mb-1">Preset: Critical</div>
+                <div className="text-xs text-slate-400 font-medium">Storm, Low Vis, High Risk</div>
+              </button>
+            </div>
+
+            {/* Quick Access Grid */}
+            <div className="mt-20 w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-6 px-4">
+              <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-700/30 rounded-3xl p-8 text-left hover:border-cyan-500/30 transition-all group">
+                <h3 className="text-xs font-bold text-cyan-400 uppercase tracking-widest mb-6 flex items-center">
+                  <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg>
+                  Operational Scenarios
                 </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-                  {recentAssessments.map((ra: any) => (
-                    <div key={ra.id} className="bg-slate-900/40 backdrop-blur-md border border-slate-800 p-4 rounded-xl flex flex-col hover:border-teal-500/30 transition-colors group">
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="text-xs font-black text-white">{ra.flight?.flightNumber || 'MANUAL'}</div>
-                        <div className={`text-[8px] font-bold px-1 rounded ${ra.aiRiskResult?.decision === 'DIVERT' ? 'bg-red-500/20 text-red-400' : ra.aiRiskResult?.decision === 'HOLD' ? 'bg-orange-500/20 text-orange-400' : ra.aiRiskResult?.decision === 'CAUTION' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-green-500/20 text-green-400'}`}>
-                          {ra.aiRiskResult?.overallRiskScore || ra.aiRiskResult?.score || ra.result?.score || 'N/A'}
-                        </div>
-                      </div>
-                      <div className="text-[10px] text-slate-400 font-bold uppercase mb-1">{ra.airport?.icao}</div>
-                      <div className="text-[9px] text-slate-500 mb-3 line-clamp-2 italic">&quot;{ra.aiRiskResult?.decision || ra.operationalRecommendation?.primaryRecommendation || 'Analyzed'}&quot;</div>
-                      <div className="mt-auto text-[8px] text-slate-600 font-mono">{new Date(ra.createdAt).toLocaleDateString()} {new Date(ra.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div>
-                    </div>
+                <div className="grid grid-cols-2 gap-3">
+                  {(['Normal', 'Rainy', 'High Traffic', 'Storm', 'Critical'] as ScenarioType[]).map(type => (
+                    <button
+                      key={type}
+                      onClick={() => { loadScenario(type); setAppScreen('dashboard'); }}
+                      className="text-[10px] px-3 py-2.5 rounded-xl font-bold bg-slate-950/50 text-slate-400 border border-slate-800 hover:bg-slate-800 hover:text-white hover:border-cyan-500/50 transition-all uppercase tracking-wider"
+                    >
+                      {type}
+                    </button>
                   ))}
                 </div>
               </div>
-            )}
+
+              <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-700/30 rounded-3xl p-8 text-left hover:border-teal-500/30 transition-all">
+                <h3 className="text-xs font-bold text-teal-400 uppercase tracking-widest mb-6 flex items-center">
+                  <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  System Logs
+                </h3>
+                <div className="space-y-3">
+                  {recentAssessments.length > 0 ? recentAssessments.slice(0, 3).map((ra: any) => (
+                    <div key={ra.id} className="flex justify-between items-center bg-slate-950/30 p-2 rounded-lg border border-slate-800/50">
+                      <div className="text-[10px] font-bold text-white uppercase">{ra.airport?.icao || ra.airport}</div>
+                      <div className={`text-[9px] font-black px-1.5 py-0.5 rounded ${ra.aiRiskResult?.decision === 'DIVERT' ? 'text-red-400 bg-red-400/10' : 'text-cyan-400 bg-cyan-400/10'}`}>{ra.aiRiskResult?.overallRiskScore || ra.result?.score || 'N/A'}</div>
+                    </div>
+                  )) : (
+                    <p className="text-[10px] text-slate-600 italic">No recent mission telemetry found.</p>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         )}
+
 
         {/* SCREEN 2: SETUP SCREEN */}
         {appScreen === 'setup' && (
@@ -1185,7 +1157,7 @@ export default function Home() {
                   <div className="flex flex-col h-full">
                     <div className="flex justify-between items-center mb-2">
                       <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                        {aiRiskResult && !aiRiskResult.error ? 'AI-Estimated Operational Landing Risk' : 'Rule-Based Fallback'}
+                        {aiRiskResult?._fallback ? 'AI Fallback Mode Active' : (aiRiskResult && !aiRiskResult._error ? 'AI-Estimated Operational Landing Risk' : 'Rule-Based Fallback')}
                       </div>
                       <div className="flex space-x-2">
                         {!speechSupported ? null : isSpeaking ? (
@@ -1194,7 +1166,7 @@ export default function Home() {
                           </button>
                         ) : (
                           <button onClick={() => {
-                            if (!speechSupported || typeof window === 'undefined' || !aiRiskResult || aiRiskResult.error) return;
+                            if (!speechSupported || typeof window === 'undefined' || !aiRiskResult || aiRiskResult._error) return;
                             window.speechSynthesis.cancel();
                             setIsSpeaking(true);
                             const text = `AI Risk Assessment. Decision: ${aiRiskResult.decision}. Score: ${aiRiskResult.overallRiskScore}. Confidence: ${aiRiskResult.confidence}. Top risks: ${aiRiskResult.topRisks.join(', ')}. Recommendations: ${aiRiskResult.recommendations.join(', ')}. Explanation: ${aiRiskResult.explanation}`;
@@ -1202,7 +1174,7 @@ export default function Home() {
                             utterance.onend = () => setIsSpeaking(false);
                             utterance.onerror = () => setIsSpeaking(false);
                             window.speechSynthesis.speak(utterance);
-                          }} disabled={!aiRiskResult || aiRiskResult.error} className="flex items-center text-[9px] font-bold bg-cyan-500/20 text-cyan-400 border border-cyan-500/50 px-2 py-1 rounded hover:bg-cyan-500/30 transition-colors uppercase tracking-widest disabled:opacity-50">
+                          }} disabled={!aiRiskResult || aiRiskResult._error} className="flex items-center text-[9px] font-bold bg-cyan-500/20 text-cyan-400 border border-cyan-500/50 px-2 py-1 rounded hover:bg-cyan-500/30 transition-colors uppercase tracking-widest disabled:opacity-50">
                             Read AI Risk Assessment
                           </button>
                         )}
@@ -1214,9 +1186,10 @@ export default function Home() {
                         <svg className="w-8 h-8 text-cyan-500 animate-spin mb-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                         <p className="text-xs text-cyan-400 animate-pulse font-bold tracking-widest uppercase">AI risk assessment in progress...</p>
                       </div>
-                    ) : aiRiskResult && !aiRiskResult.error ? (
+                    ) : aiRiskResult && !aiRiskResult._error ? (
                       <>
-                        <div className="flex flex-col items-center justify-center p-6 border-b border-slate-800/50 mb-4 bg-slate-950/40 rounded-xl relative">
+                        <div className="flex flex-col items-center justify-center p-8 border-b border-slate-800/50 mb-6 bg-slate-950/40 rounded-3xl relative overflow-hidden group">
+                          <div className="absolute inset-0 bg-gradient-to-t from-cyan-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-1000"></div>
                           <RiskGauge score={aiRiskResult.overallRiskScore} level={aiRiskResult.decision === 'DIVERT' ? 'Critical' : aiRiskResult.decision === 'HOLD' ? 'High' : aiRiskResult.decision === 'CAUTION' ? 'Medium' : 'Low'} decision={aiRiskResult.decision} />
                         </div>
                         <div className="mb-5">
@@ -1254,7 +1227,7 @@ export default function Home() {
                             <button onClick={handleGenerateAiRisk} disabled={isGeneratingAiRisk} className="mt-2 bg-slate-800 hover:bg-slate-700 text-white px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-widest transition-colors shadow-lg disabled:opacity-50">Try Again</button>
                           </div>
                         )}
-                        <div className="flex flex-col items-center justify-center p-6 border-b border-slate-800/50 mb-4 bg-slate-950/40 rounded-xl relative opacity-80">
+                        <div className="flex flex-col items-center justify-center p-8 border-b border-slate-800/50 mb-6 bg-slate-950/40 rounded-3xl relative opacity-80 overflow-hidden">
                           <RiskGauge score={result.score} level={result.level} decision={result.decision} />
                         </div>
 
@@ -1322,9 +1295,9 @@ export default function Home() {
                           window.speechSynthesis.cancel();
                           setIsSpeaking(true);
                           
-                          const currentScore = aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result.score;
-                          const currentLevel = aiRiskResult && !aiRiskResult.error ? (aiRiskResult.decision === 'DIVERT' ? 'Critical' : aiRiskResult.decision === 'HOLD' ? 'High' : aiRiskResult.decision === 'CAUTION' ? 'Medium' : 'Low') : result.level;
-                          const currentDecision = aiRiskResult && !aiRiskResult.error ? aiRiskResult.decision : result.decision;
+                          const currentScore = aiRiskResult && !aiRiskResult._error ? aiRiskResult.overallRiskScore : result.score;
+                          const currentLevel = aiRiskResult && !aiRiskResult._error ? (aiRiskResult.decision === 'DIVERT' ? 'Critical' : aiRiskResult.decision === 'HOLD' ? 'High' : aiRiskResult.decision === 'CAUTION' ? 'Medium' : 'Low') : result.level;
+                          const currentDecision = aiRiskResult && !aiRiskResult._error ? aiRiskResult.decision : result.decision;
                           const currentRisks = getTop3Risks().join(', ');
                           const currentAction = operationalRecommendation?.primaryRecommendation.replace(/_/g, ' ') || 'Monitor conditions';
                           
@@ -1555,10 +1528,10 @@ export default function Home() {
                               <span className={`px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest rounded border inline-block ${cyberExposure.level === 'High' ? 'bg-red-500/10 text-red-400 border-red-500/30' : cyberExposure.level === 'Medium' ? 'bg-orange-500/10 text-orange-400 border-orange-500/30' : 'bg-teal-500/10 text-teal-400 border-teal-500/30'}`}>
                                 {cyberExposure.level} EXPOSURE
                               </span>
-                              {cyberIndicator && !cyberIndicator.error ? (
-                                <span className="px-1.5 py-0.5 text-[8px] font-bold uppercase rounded bg-green-500/10 text-green-400 border border-green-500/20">AI Assessment Active</span>
+                              {cyberIndicator?._fallback ? (
+                                <span className="px-1.5 py-0.5 text-[8px] font-bold uppercase rounded bg-orange-500/10 text-orange-400 border border-orange-500/20">AI Fallback Mode Active</span>
                               ) : (
-                                <span className="px-1.5 py-0.5 text-[8px] font-bold uppercase rounded bg-orange-500/10 text-orange-400 border border-orange-500/20">Fallback Mode Active</span>
+                                <span className="px-1.5 py-0.5 text-[8px] font-bold uppercase rounded bg-green-500/10 text-green-400 border border-green-500/20">AI Assessment Active</span>
                               )}
                             </div>
                             <span className="text-[10px] font-mono text-slate-500">SCORE: {cyberExposure.score}</span>
@@ -1604,253 +1577,272 @@ export default function Home() {
 
                 </div>
               </div> {/* Close COL 2 */}
-                
-              {/* Mission Replay & Map View Panel (FULL WIDTH) */}
+                             {/* Mission Replay & Map View Panel (FULL WIDTH) */}
               <div className="lg:col-span-12">
-                  <Panel title="Mission Replay & Map View" icon={<svg className="w-4 h-4 mr-2 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" /></svg>}>
-                    {(!aiRiskResult || aiRiskResult.error) && (!result) ? (
-                       <div className="flex items-center justify-center h-full min-h-[150px] text-xs text-slate-500 italic border border-slate-800 rounded-xl bg-slate-900/30">
+                  <Panel title="Mission Replay & Visual Intelligence" icon={<svg className="w-4 h-4 mr-2 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" /></svg>}>
+                    {(!aiRiskResult || aiRiskResult._error) && (!result) ? (
+                       <div className="flex items-center justify-center h-full min-h-[200px] text-xs text-slate-500 italic border border-slate-800 rounded-xl bg-slate-900/30">
                          Run AI Risk Assessment to generate mission replay context.
                        </div>
                     ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-                        {/* LEFT: MAP SECTION */}
-                        <div className="relative w-full h-[320px] bg-slate-900 rounded-xl overflow-hidden border border-slate-700/50 shadow-inner">
+                      <div className="space-y-8">
+                        {/* MAP SECTION - FULL WIDTH */}
+                        <div className="relative w-full h-[400px] bg-slate-900 rounded-3xl overflow-hidden border border-slate-700/50 shadow-2xl">
                           {googleMapsApiKey ? (
                             <div ref={mapRef} className="w-full h-full" />
                           ) : (
                             <div className="flex flex-col items-center justify-center h-full text-center p-6 text-slate-500 bg-slate-900/50">
-                               <svg className="w-8 h-8 mb-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" /></svg>
-                               <p className="text-xs font-medium">Map view unavailable.</p>
-                               <p className="text-[10px] mt-1 opacity-80">Add NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to enable Google Maps.</p>
+                               <svg className="w-12 h-12 mb-4 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" /></svg>
+                               <p className="text-sm font-bold uppercase tracking-widest text-slate-400">Tactical Map View</p>
+                               <p className="text-[10px] mt-2 opacity-60">Add NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to enable satellite telemetry.</p>
                             </div>
                           )}
                           
                           {/* OVERLAYS ON MAP */}
-                          <div className="absolute top-3 left-3 flex flex-col gap-2 pointer-events-none">
-                             <div className="bg-slate-950/80 backdrop-blur-md px-3 py-2 rounded-lg border border-slate-800 shadow-xl pointer-events-auto">
-                                <div className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Mission Route</div>
+                          <div className="absolute top-6 left-6 pointer-events-none">
+                             <div className="bg-slate-950/90 backdrop-blur-xl px-5 py-3 rounded-2xl border border-slate-700/50 shadow-2xl pointer-events-auto">
+                                <div className="text-[10px] font-black text-cyan-500 uppercase tracking-[0.2em] mb-2">Active Mission Route</div>
                                 {selectedFlight && selectedFlight.departureIata ? (
-                                   <div className="text-xs font-bold text-white flex items-center">
-                                      {selectedFlight.departureIata}
-                                      <svg className="w-3 h-3 mx-1.5 text-cyan-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
-                                      {airportProfile?.iata || airportProfile?.icao || airport}
+                                   <div className="text-sm font-black text-white flex items-center">
+                                      <span className="bg-slate-800 px-2 py-1 rounded">{selectedFlight.departureIata}</span>
+                                      <svg className="w-4 h-4 mx-3 text-cyan-500 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+                                      <span className="bg-cyan-900/30 text-cyan-400 px-2 py-1 rounded border border-cyan-500/30">{airportProfile?.iata || airportProfile?.icao || airport}</span>
                                    </div>
                                 ) : (
-                                   <div className="text-xs font-bold text-white flex items-center">
-                                      LOCAL FLIGHT
-                                      <svg className="w-3 h-3 mx-1.5 text-cyan-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
-                                      {airportProfile?.iata || airportProfile?.icao || airport}
+                                   <div className="text-sm font-black text-white flex items-center">
+                                      <span className="bg-slate-800 px-2 py-1 rounded">LOCAL OPS</span>
+                                      <svg className="w-4 h-4 mx-3 text-cyan-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+                                      <span className="bg-cyan-900/30 text-cyan-400 px-2 py-1 rounded border border-cyan-500/30">{airportProfile?.iata || airportProfile?.icao || airport}</span>
                                    </div>
                                 )}
                              </div>
                           </div>
                         </div>
 
-                        {/* RIGHT: MISSION REPLAY ANIMATION SECTION */}
-                        <div className="space-y-4">
-                          <div className="bg-slate-900/60 p-4 rounded-xl border border-slate-800/60 relative overflow-hidden flex flex-col sm:flex-row gap-5 items-center shadow-inner h-[230px]">
+                        {/* MISSION REPLAY ANIMATION SECTION - CENTERED & DOMINANT */}
+                        <div className="flex flex-col items-center justify-center space-y-6">
+                          <div className="relative w-full max-w-4xl bg-slate-900/80 rounded-3xl border border-slate-700/50 overflow-hidden shadow-2xl min-h-[300px] flex flex-col items-center justify-center p-8">
                              {/* Weather Animation Canvas */}
-                             <div className="absolute inset-0 z-0 pointer-events-none opacity-40">
+                             <div className="absolute inset-0 z-0 pointer-events-none opacity-30">
                                 {weatherCondition.toLowerCase().includes('rain') && <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjIwIj48cmVjdCB3aWR0aD0iMSIgaGVpZ2h0PSI4IiBmaWxsPSIjNGRhNmZmIiBvcGFjaXR5PSIwLjUiLz48L3N2Zz4=')] animate-rain" />}
                                 {weatherCondition.toLowerCase().includes('snow') && <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4IiBoZWlnaHQ9IjgiPjxjaXJjbGUgY3g9IjQiIGN5PSI0IiByPSIyIiBmaWxsPSIjZmZmZmZmIiBvcGFjaXR5PSIwLjgiLz48L3N2Zz4=')] animate-snow" />}
                                 {(weatherCondition.toLowerCase().includes('fog') || visibilityCategory === 'Low') && <div className="absolute inset-0 bg-gradient-to-t from-slate-400/40 to-transparent" />}
-                                {weatherCondition.toLowerCase().includes('storm') && <div className="absolute inset-0 bg-red-500/10 animate-pulse" />}
+                                {weatherCondition.toLowerCase().includes('storm') && <div className="absolute inset-0 bg-red-500/5 animate-pulse" />}
                              </div>
 
-                             {/* Animation Scene */}
-                             <div className="relative w-40 h-40 flex-shrink-0 bg-slate-950 rounded-lg border border-slate-800 overflow-hidden z-10 flex items-center justify-center perspective-1000 shadow-[inset_0_0_20px_rgba(0,0,0,0.8)]">
-                                <div className="w-10 h-48 bg-slate-800 relative flex items-center justify-center rotate-x-60 scale-125 border-x-2 border-slate-700">
+                             {/* Centered Animation Scene */}
+                             <div className="relative w-full max-w-lg h-48 sm:h-64 flex-shrink-0 bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden z-10 flex items-center justify-center perspective-1000 shadow-[inset_0_0_60px_rgba(0,0,0,1)]">
+                                <div className="w-24 h-[600px] bg-slate-800 relative flex items-center justify-center rotate-x-60 scale-[2] border-x-4 border-slate-700 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
                                    {/* Runway dashes */}
-                                   <div className="h-full w-0.5 border-r border-dashed border-white/60 animate-runway"></div>
-                                   <div className="absolute top-2 w-full h-0.5 bg-white/30"></div>
-                                   <div className="absolute top-6 w-full h-0.5 bg-white/30"></div>
+                                   <div className="h-full w-1 border-r-2 border-dashed border-white/40 animate-runway"></div>
+                                   <div className="absolute top-10 w-full h-1 bg-white/20"></div>
+                                   <div className="absolute top-40 w-full h-1 bg-white/20"></div>
                                 </div>
-                                <div className="absolute text-cyan-400 drop-shadow-[0_0_8px_rgba(6,182,212,0.8)] animate-approach">
-                                   <svg className="w-10 h-10 transform -rotate-90" fill="currentColor" viewBox="0 0 24 24"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>
+                                <div className="absolute text-cyan-400 drop-shadow-[0_0_15px_rgba(6,182,212,1)] animate-approach scale-150">
+                                   <svg className="w-16 h-16 transform -rotate-90" fill="currentColor" viewBox="0 0 24 24"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>
+                                </div>
+                             </div>
+
+                             {/* HUD Overlays */}
+                             <div className="absolute top-6 left-6 right-6 flex justify-between z-20 pointer-events-none">
+                                <div className="font-mono text-[10px] text-cyan-500/60 bg-slate-950/50 p-2 rounded border border-cyan-500/20">
+                                   ALT: 1,240 FT<br/>
+                                   SPD: 145 KTS
+                                </div>
+                                <div className="font-mono text-[10px] text-cyan-500/60 bg-slate-950/50 p-2 rounded border border-cyan-500/20 text-right">
+                                   GS: 3.0&deg;<br/>
+                                   LOC: CENTER
                                 </div>
                              </div>
 
                              {/* Replay Details */}
-                             <div className="flex-1 z-10 space-y-3 text-center sm:text-left py-2">
-                                <div className="flex flex-wrap gap-2 justify-center sm:justify-start items-center">
-                                   <span className={`px-2 py-1 text-[9px] font-bold uppercase tracking-widest rounded border shadow-sm ${operationalRecommendation?.primaryRecommendation === 'DIVERT' ? 'bg-red-500/20 text-red-400 border-red-500/50' : operationalRecommendation?.primaryRecommendation === 'HOLD' ? 'bg-orange-500/20 text-orange-400 border-orange-500/50' : operationalRecommendation?.primaryRecommendation === 'PROCEED_WITH_CAUTION' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50' : 'bg-green-500/20 text-green-400 border-green-500/50'}`}>
+                             <div className="relative z-10 w-full text-center mt-6">
+                                <div className="inline-flex flex-wrap gap-3 justify-center items-center bg-slate-950/80 backdrop-blur-md px-6 py-3 rounded-2xl border border-slate-800 shadow-xl">
+                                   <span className={`px-4 py-1.5 text-xs font-black uppercase tracking-[0.2em] rounded-lg border shadow-lg ${operationalRecommendation?.primaryRecommendation === 'DIVERT' ? 'bg-red-500/20 text-red-500 border-red-500/50 animate-pulse' : operationalRecommendation?.primaryRecommendation === 'HOLD' ? 'bg-orange-500/20 text-orange-500 border-orange-500/50' : operationalRecommendation?.primaryRecommendation === 'PROCEED_WITH_CAUTION' ? 'bg-yellow-500/20 text-yellow-500 border-yellow-500/50' : 'bg-green-500/20 text-green-500 border-green-500/50'}`}>
                                       {operationalRecommendation?.primaryRecommendation?.replace(/_/g, ' ') || 'N/A'}
                                    </span>
-                                   <span className="px-2 py-1 text-[9px] font-bold uppercase tracking-widest rounded border bg-slate-800 text-slate-300 border-slate-600 shadow-sm">
-                                      SCORE: {aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result?.score}
+                                   <div className="h-4 w-px bg-slate-800 mx-2"></div>
+                                   <span className="text-xs font-black text-white uppercase tracking-widest">
+                                      RISK SCORE: <span className="text-cyan-400">{aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result?.score}</span>
                                    </span>
-                                   {aiRiskResult && !aiRiskResult.error ? (
-                                     <span className="px-1.5 py-1 text-[8px] font-bold uppercase rounded bg-green-500/10 text-green-400 border border-green-500/20">AI Assessment Active</span>
-                                   ) : (
-                                     <span className="px-1.5 py-1 text-[8px] font-bold uppercase rounded bg-orange-500/10 text-orange-400 border border-orange-500/20">Fallback Mode Active</span>
-                                   )}
-                                </div>
-                                <div className="text-[10px] text-slate-400/90 leading-relaxed italic mt-2 border-t border-slate-700/50 pt-2">
-                                   Mission replay visualization based on available operational inputs. Not a certified flight simulation.
                                 </div>
                              </div>
                           </div>
 
-                          {/* TOP 3 LANDING RISKS CARD */}
-                          <div className="flex flex-col p-4 border border-dashed border-cyan-700/50 rounded-xl bg-cyan-950/20 shadow-inner mt-4">
-                            <div className="flex items-center mb-3">
-                              <svg className="w-5 h-5 mr-3 text-cyan-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                              <div>
-                                <span className="text-xs font-bold text-cyan-400 uppercase tracking-widest block mb-0.5">Top 3 Landing Risks</span>
-                                {isGeneratingTopRisks && !dynamicRisks ? (
-                                  <p className="text-[10px] text-teal-400 animate-pulse font-bold tracking-widest uppercase">Generating scenario-specific risks...</p>
-                                ) : dynamicRisks && dynamicRisks.source === 'GEMINI' ? (
-                                  <p className="text-[10px] text-green-400 font-bold uppercase tracking-widest">AI-generated landing risks</p>
-                                ) : (
-                                  <p className="text-[10px] text-orange-400 font-bold uppercase tracking-widest">Rule-based landing risks</p>
-                                )}
-                              </div>
-                            </div>
-                            <ul className="space-y-2">
-                              {isGeneratingTopRisks && !dynamicRisks ? (
-                                <div className="flex items-center justify-center py-4">
-                                  <svg className="w-5 h-5 text-cyan-500 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                          {/* TOP 3 LANDING RISKS CARD - CENTERED GRID */}
+                          <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-4">
+                            {(dynamicRisks?.risks || getTop3Risks()).map((risk, index) => (
+                              <div key={index} className="flex flex-col p-6 border border-slate-800 bg-slate-900/40 rounded-3xl hover:border-cyan-500/30 transition-all group">
+                                <div className="flex items-center mb-4">
+                                  <span className="w-8 h-8 rounded-full bg-cyan-900/50 border border-cyan-500/30 text-xs font-black text-cyan-400 flex items-center justify-center mr-3 flex-shrink-0 group-hover:scale-110 transition-transform">{index + 1}</span>
+                                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Priority Risk</span>
                                 </div>
-                              ) : (
-                                (dynamicRisks?.risks || getTop3Risks()).map((risk, index) => (
-                                  <li key={index} className="flex items-start text-xs text-slate-300 bg-slate-900/40 p-2 rounded-lg border border-slate-800/60">
-                                    <span className="w-5 h-5 rounded-full bg-cyan-900/50 border border-cyan-500/30 text-[10px] font-bold text-cyan-400 flex items-center justify-center mr-2 flex-shrink-0">{index + 1}</span>
-                                    <span className="mt-0.5">{risk}</span>
-                                  </li>
-                                ))
-                              )}
-                            </ul>
+                                <p className="text-sm text-slate-200 leading-relaxed font-medium">{risk}</p>
+                              </div>
+                            ))}
                           </div>
                         </div>
-
                       </div>
                     )}
                   </Panel>
-                </div>
               </div>
             </div>
+          </div>
         )}
+
 
         {/* SCREEN 4: PILOT BRIEFING SCREEN */}
         {appScreen === 'briefing' && result && (
-          <div className="max-w-4xl mx-auto w-full animate-in fade-in slide-in-from-right-4 flex flex-col h-full">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-3xl font-black text-white tracking-tight">Pilot Briefing</h2>
-              <button onClick={() => setAppScreen('dashboard')} className="text-xs text-slate-500 hover:text-white uppercase tracking-widest font-bold">&larr; Back to Dashboard</button>
+          <div className="max-w-5xl mx-auto w-full animate-in fade-in slide-in-from-bottom-8 duration-700 flex flex-col h-full py-8">
+            <div className="flex items-center justify-between mb-12">
+              <div>
+                <h2 className="text-5xl font-black text-white tracking-tighter">Pilot Briefing</h2>
+                <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-2">Mission Intelligence Synthesis</p>
+              </div>
+              <button 
+                onClick={() => setAppScreen('dashboard')} 
+                className="group flex items-center bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-800 px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all"
+              >
+                <svg className="w-4 h-4 mr-2 group-hover:-translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                Tactical Dashboard
+              </button>
             </div>
 
-            {/* Briefing Header: Decision & Hazards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-              <div className="bg-slate-900/80 p-5 rounded-2xl border border-slate-700/50 flex flex-col items-center justify-center text-center">
-                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Final Recommendation</div>
-                <div className={`text-3xl font-black uppercase tracking-widest ${operationalRecommendation?.primaryRecommendation === 'DIVERT' ? 'text-red-500' : operationalRecommendation?.primaryRecommendation === 'HOLD' ? 'text-orange-500' : operationalRecommendation?.primaryRecommendation === 'PROCEED_WITH_CAUTION' ? 'text-yellow-500' : 'text-green-500'}`}>
+            {/* Centered Primary Decision Gauge */}
+            <div className="flex flex-col items-center mb-12">
+              <div className="relative bg-slate-900/60 backdrop-blur-2xl border border-slate-800 p-10 rounded-[40px] shadow-2xl w-full max-w-2xl flex flex-col items-center text-center group">
+                <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-slate-950 px-4 py-1 rounded-full border border-slate-700 text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                  System Final Recommendation
+                </div>
+                
+                <div className={`text-7xl sm:text-9xl font-black uppercase tracking-tighter mb-4 ${operationalRecommendation?.primaryRecommendation === 'DIVERT' ? 'text-red-500 drop-shadow-[0_0_30px_rgba(239,68,68,0.4)] animate-pulse' : operationalRecommendation?.primaryRecommendation === 'HOLD' ? 'text-orange-500 drop-shadow-[0_0_30px_rgba(249,115,22,0.4)]' : operationalRecommendation?.primaryRecommendation === 'PROCEED_WITH_CAUTION' ? 'text-yellow-500 drop-shadow-[0_0_30px_rgba(234,179,8,0.4)]' : 'text-green-500 drop-shadow-[0_0_30px_rgba(16,185,129,0.4)]'}`}>
                   {operationalRecommendation?.primaryRecommendation?.replace(/_/g, ' ') || 'N/A'}
                 </div>
-                <div className="text-xs text-slate-400 mt-2">Score: {aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result.score}</div>
-                {(!aiRiskResult || aiRiskResult.error) && <div className="text-[8px] mt-1 bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded border border-slate-700">Rule-Based Fallback</div>}
+                
+                <div className="flex items-center gap-4 mt-2">
+                  <div className="text-xs font-bold text-slate-400 uppercase tracking-widest bg-slate-950 px-3 py-1 rounded-lg border border-slate-800">
+                    Risk Score: <span className="text-white">{aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result.score}</span>
+                  </div>
+                  {(!aiRiskResult || aiRiskResult.error) && (
+                    <div className="text-[10px] font-black text-orange-400 uppercase tracking-widest bg-orange-400/10 px-3 py-1 rounded-lg border border-orange-400/20">Rule-Based Fallback</div>
+                  )}
+                </div>
               </div>
-              <div className="md:col-span-2 bg-slate-900/80 p-5 rounded-2xl border border-slate-700/50">
-                <h3 className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest mb-3 flex items-center"><svg className="w-3.5 h-3.5 mr-2 text-cyan-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Pilot Action Checklist</h3>
-                <ul className="space-y-2 text-xs text-slate-300">
+            </div>
+
+            {/* Split View: Visualization & Checklist */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+              {/* Landing Visualization (Dominant) */}
+              <div className="lg:col-span-1">
+                <LandingVisualization 
+                  riskLevel={
+                    (aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result.score) >= 75 ? 'Critical' :
+                    (aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result.score) >= 50 ? 'High' :
+                    (aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result.score) >= 25 ? 'Medium' : 'Low'
+                  }
+                  riskScore={aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result.score}
+                />
+              </div>
+
+              {/* Pilot Action Checklist */}
+              <div className="lg:col-span-1 bg-slate-900/60 backdrop-blur-xl p-8 rounded-[32px] border border-slate-800 shadow-xl">
+                <h3 className="text-xs font-black text-cyan-400 uppercase tracking-[0.2em] mb-6 flex items-center">
+                  <svg className="w-5 h-5 mr-3 text-cyan-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                  Operational Directives
+                </h3>
+                <ul className="space-y-4">
                   {operationalRecommendation?.pilotActions.map((action: string, i: number) => (
-                    <li key={i} className="flex items-start">
-                      <span className="w-1 h-1 mt-1.5 rounded-full bg-cyan-500/50 mr-2 flex-shrink-0"></span>{action}
+                    <li key={i} className="flex items-start bg-slate-950/40 p-4 rounded-2xl border border-slate-800/50 hover:border-cyan-500/30 transition-colors group">
+                      <span className="w-6 h-6 rounded-lg bg-cyan-900/30 border border-cyan-500/30 text-[10px] font-black text-cyan-400 flex items-center justify-center mr-4 flex-shrink-0 group-hover:scale-110 transition-transform">{i + 1}</span>
+                      <span className="text-sm text-slate-200 font-medium leading-relaxed">{action}</span>
                     </li>
                   ))}
                 </ul>
+              </div>
             </div>
-          </div>
 
-          {/* Landing Visualization (Pilot Mode Preview) */}
-          <div className="mb-6">
-            <LandingVisualization 
-              riskLevel={
-                (aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result.score) >= 75 ? 'Critical' :
-                (aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result.score) >= 50 ? 'High' :
-                (aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result.score) >= 25 ? 'Medium' : 'Low'
-              }
-              riskScore={aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result.score}
-            />
-          </div>
+            {/* AI Safety Officer Briefing - Centered & Premium */}
+            <div className="w-full">
+              <Panel title="Gemini AI Safety Synthesis" icon={<svg className="w-4 h-4 mr-2 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>}>
+                  <div className="flex flex-col min-h-[300px] p-2">
+                    {/* Voice Controls */}
+                    <div className="flex justify-between items-center mb-6 border-b border-slate-800 pb-4">
+                      <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Synthetic Voice Assistant</div>
+                      {!speechSupported ? null : isSpeaking ? (
+                        <button onClick={handleStopBriefing} className="flex items-center text-[10px] font-black bg-red-500 text-white px-4 py-2 rounded-full hover:bg-red-600 transition-colors uppercase tracking-widest shadow-lg shadow-red-500/20">
+                          <svg className="w-3 h-3 mr-2 animate-pulse" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></svg>
+                          Abort Synthesis
+                        </button>
+                      ) : (
+                        <button onClick={() => {
+                          if (!speechSupported || typeof window === 'undefined') return;
+                          window.speechSynthesis.cancel();
+                          handleSpeakBriefing();
+                        }} className="flex items-center text-[10px] font-black bg-purple-600 text-white px-4 py-2 rounded-full hover:bg-purple-500 transition-all uppercase tracking-widest shadow-lg shadow-purple-500/20 group">
+                          <svg className="w-3 h-3 mr-2 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                          Speak Briefing
+                        </button>
+                      )}
+                    </div>
 
-          {/* AI Safety Officer Briefing */}
-          <Panel title="Gemini Safety Officer Briefing" icon={<svg className="w-4 h-4 mr-2 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>}>
-              <div className="flex flex-col flex-grow min-h-[300px]">
-                {/* Voice Controls */}
-                <div className="flex justify-end mb-4 border-b border-purple-900/30 pb-3">
-                  {!speechSupported ? null : isSpeaking ? (
-                    <button onClick={handleStopBriefing} className="flex items-center text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/50 px-3 py-1.5 rounded hover:bg-red-500/30 transition-colors uppercase tracking-widest">
-                      <svg className="w-3 h-3 mr-1.5 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" /></svg>
-                      Stop Voice
-                    </button>
-                  ) : (
-                    <button onClick={() => {
-                      if (!speechSupported || typeof window === 'undefined') return;
-                      window.speechSynthesis.cancel();
-                      handleSpeakBriefing();
-                    }} className="flex items-center text-[10px] font-bold bg-purple-500/20 text-purple-400 border border-purple-500/50 px-3 py-1.5 rounded hover:bg-purple-500/30 transition-colors uppercase tracking-widest">
-                      <svg className="w-3 h-3 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
-                      Read Briefing
-                    </button>
-                  )}
-                </div>
-
-                {geminiBriefing ? (
-                  <div className="text-sm text-purple-100 leading-relaxed font-medium">
-                    {geminiBriefing === "Gemini briefing unavailable. Local risk analysis remains available." ? (
-                      <p className="text-red-400">{geminiBriefing}</p>
+                    {geminiBriefing ? (
+                      <div className="text-base text-slate-200 leading-relaxed font-medium bg-slate-950/50 p-8 rounded-[32px] border border-slate-800">
+                        {geminiBriefing === "Gemini briefing unavailable. Local risk analysis remains available." ? (
+                          <div className="flex flex-col items-center py-8">
+                             <svg className="w-12 h-12 text-orange-500/50 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                             <p className="text-orange-400 text-sm font-bold uppercase tracking-widest">AI Synthesis Offline</p>
+                             <p className="text-slate-500 text-xs mt-2 italic">{geminiBriefing}</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-6">
+                            {geminiBriefing.split('\n').map((line, i) => {
+                              if (!line.trim()) return null;
+                              if (line.includes(':') && line.split(':')[0].length < 30) {
+                                const [heading, ...rest] = line.split(':');
+                                const content = rest.join(':').trim();
+                                return (
+                                  <div key={i} className="border-l-2 border-purple-500/30 pl-6 py-1">
+                                    <h4 className="text-[10px] font-black text-purple-400 uppercase tracking-[0.2em] mb-2">{heading}</h4>
+                                    <p className="text-slate-200 text-sm">{content}</p>
+                                  </div>
+                                );
+                              }
+                              return <p key={i} className="text-slate-300 text-sm leading-relaxed">{line}</p>;
+                            })}
+                          </div>
+                        )}
+                      </div>
                     ) : (
-                      geminiBriefing.split('\n').map((line, i) => {
-                        if (!line.trim()) return <div key={i} className="h-3"></div>;
-                        if (line.includes(':') && line.split(':')[0].length < 25) {
-                          const [heading, ...rest] = line.split(':');
-                          const content = rest.join(':').trim();
-                          if (content) {
-                            return (
-                              <div key={i} className="mb-3">
-                                <span className="text-purple-300 font-bold uppercase text-[10px] tracking-widest mr-2">{heading}:</span>
-                                <span className="text-purple-100">{content}</span>
-                              </div>
-                            );
-                          } else {
-                            return (
-                              <div key={i} className="mt-4 mb-1 text-purple-300 font-bold uppercase text-[10px] tracking-widest">
-                                {heading}:
-                              </div>
-                            );
-                          }
-                        }
-                        return <p key={i} className="mb-3 pl-2 border-l-2 border-purple-800/50 text-purple-200">{line}</p>;
-                      })
+                      <div className="flex flex-col items-center justify-center text-center py-12 bg-slate-950/30 rounded-[32px] border border-dashed border-slate-800">
+                        <div className="w-16 h-16 bg-purple-900/20 rounded-full flex items-center justify-center mb-6">
+                          <svg className="w-8 h-8 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.663 17h4.674a1 1 0 00.922-.617l2.108-4.742A1 1 0 0016.445 10H7.555a1 1 0 00-.922.641l2.108 4.742a1 1 0 00.922.617zM2 17V7a2 2 0 012-2h16a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2z" /></svg>
+                        </div>
+                        <h4 className="text-lg font-black text-white mb-2">Ready for AI Synthesis</h4>
+                        <p className="text-sm text-slate-400 mb-8 max-w-md">Gemini will process all tactical inputs to provide a high-level safety narrative for this mission.</p>
+                        <button
+                          onClick={handleGenerateBriefing}
+                          disabled={isGeneratingBriefing}
+                          className="relative group bg-white text-slate-950 px-10 py-4 rounded-full text-[10px] font-black uppercase tracking-[0.2em] hover:bg-purple-500 hover:text-white transition-all shadow-xl hover:shadow-purple-500/20 disabled:opacity-50"
+                        >
+                          {isGeneratingBriefing ? 'Synthesizing Tactical Intel...' : 'Generate Gemini Briefing'}
+                        </button>
+                      </div>
                     )}
                   </div>
-                ) : (
-                  <div className="flex flex-col h-full items-center justify-center text-center py-10 flex-grow">
-                    <p className="text-sm text-slate-400 mb-6 max-w-md">Gemini LLM requires manual triggering to synthesize the operational context into a pilot-friendly safety briefing.</p>
-                    <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-xl max-w-lg mb-6">
-                      <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Local Summary</h4>
-                      <p className="text-xs text-slate-300 italic">{operationalRecommendation?.dispatcherNotes.join(' ') || 'Generate Gemini briefing for advanced synthesis.'}</p>
-                    </div>
-                    <button
-                      onClick={handleGenerateBriefing}
-                      disabled={isGeneratingBriefing}
-                      className="bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white px-6 py-3 rounded-lg text-xs font-bold uppercase tracking-widest transition-colors shadow-[0_0_20px_rgba(147,51,234,0.4)]"
-                    >
-                      {isGeneratingBriefing ? 'Generating Gemini Briefing...' : 'Generate AI Briefing'}
-                    </button>
-                  </div>
-                )}
-              </div>
-            </Panel>
+              </Panel>
+            </div>
 
-            <div className="mt-8 flex justify-center">
-              <button onClick={handleStartNewMission} className="bg-slate-800 hover:bg-slate-700 text-white border border-slate-600 px-6 py-3 rounded-full text-xs font-bold uppercase tracking-widest transition-colors">
-                Start New Mission
+            <div className="mt-12 flex justify-center">
+              <button 
+                onClick={handleStartNewMission} 
+                className="bg-slate-900 hover:bg-slate-800 text-white border border-slate-800 px-12 py-4 rounded-full text-xs font-black uppercase tracking-[0.3em] transition-all hover:scale-105 active:scale-95 shadow-2xl"
+              >
+                Reset Mission Control
               </button>
             </div>
           </div>
         )}
+
 
         <div className="text-[9px] text-slate-600/80 uppercase tracking-widest text-center mt-12 mb-4 border-t border-slate-900/50 pt-4 max-w-xl mx-auto">
           This is a prototype decision-support tool and is not certified for real-world aviation operations.
@@ -1869,25 +1861,25 @@ export default function Home() {
 
 function RiskGauge({ score, level, decision }: { score: number, level: string, decision: string }) {
   const normalizedScore = Math.min(100, Math.max(0, score));
-  const dashArrayValue = (normalizedScore / 100) * 125.6;
+  const dashArrayValue = (normalizedScore / 100) * 251.2; // Adjusted for 80 radius
 
   const color = level === 'Critical' ? 'text-red-500' : level === 'High' ? 'text-orange-500' : level === 'Medium' ? 'text-yellow-500' : 'text-green-500';
   const decisionColor = decision === 'DIVERT' ? 'text-red-500 animate-pulse' : decision === 'HOLD' ? 'text-orange-500' : decision === 'CAUTION' ? 'text-yellow-500' : 'text-green-500';
 
   return (
-    <div className="relative flex flex-col items-center py-2 w-full">
-      <div className="relative w-48 h-24 overflow-hidden mb-1">
-        <svg className="w-48 h-48 transform origin-bottom" viewBox="0 0 100 100">
-          <path className="text-slate-800/80" strokeWidth="8" stroke="currentColor" fill="none" strokeLinecap="round" d="M 10,50 A 40,40 0 1,1 90,50" />
-          <path className={`${color} transition-all duration-1000 ease-out`} strokeDasharray={`${dashArrayValue}, 125.6`} strokeWidth="8" stroke="currentColor" fill="none" strokeLinecap="round" d="M 10,50 A 40,40 0 1,1 90,50" />
+    <div className="relative flex flex-col items-center py-4 w-full">
+      <div className="relative w-64 h-32 overflow-hidden mb-4">
+        <svg className="w-64 h-64 transform origin-bottom" viewBox="0 0 200 200">
+          <path className="text-slate-800/40" strokeWidth="12" stroke="currentColor" fill="none" strokeLinecap="round" d="M 20,100 A 80,80 0 1,1 180,100" />
+          <path className={`${color} transition-all duration-1500 ease-out`} strokeDasharray={`${dashArrayValue}, 251.2`} strokeWidth="12" stroke="currentColor" fill="none" strokeLinecap="round" d="M 20,100 A 80,80 0 1,1 180,100" />
         </svg>
-        <div className="absolute bottom-0 left-0 right-0 flex flex-col items-center pb-1">
-          <span className={`text-5xl font-black leading-none tracking-tighter ${color}`}>{score}</span>
+        <div className="absolute bottom-0 left-0 right-0 flex flex-col items-center pb-2">
+          <span className={`text-6xl font-black leading-none tracking-tighter ${color}`}>{score}</span>
         </div>
       </div>
-      <div className="text-center mt-3">
-        <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">System Decision</div>
-        <div className={`text-2xl font-black uppercase tracking-widest ${decisionColor}`}>{decision}</div>
+      <div className="text-center mt-6">
+        <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2">Final Operational Decision</div>
+        <div className={`text-4xl font-black uppercase tracking-widest ${decisionColor} drop-shadow-[0_0_20px_rgba(0,0,0,0.5)]`}>{decision}</div>
       </div>
     </div>
   )

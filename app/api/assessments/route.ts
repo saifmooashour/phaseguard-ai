@@ -2,6 +2,7 @@ import { Firestore } from '@google-cloud/firestore'
 import { NextResponse } from 'next/server'
 
 // Initialize Firestore with fallback for projectId
+// Note: This uses Server-side SDK which typically requires service account credentials
 const firestore = new Firestore({
   projectId: process.env.GOOGLE_CLOUD_PROJECT || "phaseguard-ai",
   databaseId: process.env.FIRESTORE_DATABASE_ID || "(default)"
@@ -30,8 +31,10 @@ export async function POST(req: Request) {
     
     // Return graceful failure as per requirements
     return NextResponse.json({
-      source: "UNAVAILABLE",
-      message: "Assessment logging unavailable. Local analysis remains active."
+      success: false,
+      fallback: true,
+      message: "Database unavailable, continuing without persistence",
+      source: "UNAVAILABLE"
     }, { status: 200 })
   }
 }
@@ -63,8 +66,10 @@ export async function GET() {
     
     // Return graceful failure as per requirements
     return NextResponse.json({
-      source: "UNAVAILABLE",
-      message: "Assessment logging unavailable. Local analysis remains active."
+      success: false,
+      fallback: true,
+      message: "Database unavailable, continuing without persistence",
+      source: "UNAVAILABLE"
     }, { status: 200 })
   }
 }

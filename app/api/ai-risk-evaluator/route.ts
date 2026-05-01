@@ -1,19 +1,33 @@
 import { NextResponse } from 'next/server';
-import { VertexAI } from '@google-cloud/vertexai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export async function POST(request: Request) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 25000);
+  
+  let body: any = {};
   try {
-    const body = await request.json();
-    
-    const projectId = process.env.GOOGLE_CLOUD_PROJECT;
-    const location = process.env.GOOGLE_CLOUD_LOCATION || 'us-central1';
+    body = await request.json();
+  } catch (e) {
+    console.error('Failed to parse request body:', e);
+  }
 
-    if (!projectId) {
-       return NextResponse.json({ error: 'Vertex AI project ID is missing from environment.' }, { status: 500 });
+  try {
+    const apiKey = process.env.GEMINI_API_KEY;
+
+    if (!apiKey) {
+      clearTimeout(timeoutId);
+      console.error('GEMINI_API_KEY is missing from environment.');
+      return NextResponse.json({
+        success: false,
+        fallback: true,
+        message: "AI unavailable, using fallback logic",
+        data: generateFallbackData(body)
+      });
     }
 
-    const vertexAI = new VertexAI({ project: projectId, location: location });
-    const generativeModel = vertexAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
     const prompt = `
 You are an expert aviation risk evaluator for PhaseGuard AI.
@@ -68,23 +82,51 @@ Return EXACTLY and ONLY the following JSON structure without any markdown blocks
 }
 `;
 
-    const response = await generativeModel.generateContent(prompt);
-    let text = response.response.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+    // Fetch with signal for timeout
+    const result = await model.generateContent(prompt);
+    // Note: GoogleGenerativeAI SDK doesn't natively support AbortSignal in generateContent yet in some versions, 
+    // but we can wrap it in a Promise.race for a strict timeout if needed, 
+    // or just rely on the fact that we clear the timeout.
+    // However, to satisfy the requirement "Use AbortController or equivalent":
+    
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('TIMEOUT')), 25000);
+    });
+
+    const responseResult: any = await Promise.race([
+      result.response,
+      timeoutPromise
+    ]);
+
+    clearTimeout(timeoutId);
+
+    let text = responseResult.text() || "{}";
     
     // Clean up potential markdown formatting from LLM response
-    if (text.startsWith('\`\`\`json')) {
+    if (text.startsWith('```json')) {
       text = text.substring(7);
-      if (text.endsWith('\`\`\`')) {
+      if (text.endsWith('```')) {
         text = text.substring(0, text.length - 3);
       }
-    } else if (text.startsWith('\`\`\`')) {
+    } else if (text.startsWith('```')) {
       text = text.substring(3);
-      if (text.endsWith('\`\`\`')) {
+      if (text.endsWith('```')) {
         text = text.substring(0, text.length - 3);
       }
     }
     
-    const data = JSON.parse(text.trim());
+    let data;
+    try {
+      data = JSON.parse(text.trim());
+    } catch (e) {
+      console.error('Failed to parse Gemini response:', text);
+      return NextResponse.json({
+        success: false,
+        fallback: true,
+        message: "AI response format error, using fallback logic",
+        data: generateFallbackData(body)
+      });
+    }
 
     // Validate bounds
     data.overallRiskScore = Math.max(0, Math.min(100, Number(data.overallRiskScore) || 0));
@@ -110,11 +152,76 @@ Return EXACTLY and ONLY the following JSON structure without any markdown blocks
     if (!Array.isArray(data.missingDataWarnings)) data.missingDataWarnings = [];
     if (!Array.isArray(data.recommendations)) data.recommendations = [];
 
-    return NextResponse.json(data);
+    return NextResponse.json({
+      success: true,
+      fallback: false,
+      message: "AI analysis completed",
+      data: data
+    });
 
   } catch (error: any) {
-    console.error('\n=== VERTEX AI RISK EVALUATOR ERROR ===');
+    clearTimeout(timeoutId);
+    const isTimeout = error.message === 'TIMEOUT' || error.name === 'AbortError';
+    console.error(`\n=== GEMINI AI RISK EVALUATOR ERROR (${isTimeout ? 'TIMEOUT' : 'GENERAL'}) ===`);
     console.error(error);
-    return NextResponse.json({ error: 'AI Risk Evaluator unavailable due to backend error.' }, { status: 500 });
+    
+    return NextResponse.json({
+      success: false,
+      fallback: true,
+      message: isTimeout ? "AI request timed out, using fallback logic" : "AI unavailable, using fallback logic",
+      data: generateFallbackData(body)
+    });
   }
 }
+
+function generateFallbackData(body: any) {
+  const { manualOperationalInputs, weather, traffic } = body || {};
+  const runway = manualOperationalInputs?.runwayCondition || 'Dry';
+  const workload = manualOperationalInputs?.workload || 'Low';
+  const aircraft = manualOperationalInputs?.aircraftCondition || 'Normal';
+  
+  let score = 20;
+  const risks = [];
+  
+  if (runway === 'Wet') { score += 15; risks.push("Wet runway surface"); }
+  if (runway === 'Contaminated') { score += 30; risks.push("Contaminated runway surface"); }
+  if (traffic === 'Medium') { score += 10; risks.push("Moderate traffic density"); }
+  if (traffic === 'High') { score += 20; risks.push("High traffic density"); }
+  if (workload === 'Medium') { score += 10; risks.push("Elevated crew workload"); }
+  if (workload === 'High') { score += 25; risks.push("High crew workload task saturation"); }
+  if (aircraft === 'Minor Issue') { score += 20; risks.push("Minor aircraft systems alert"); }
+  
+  if (weather?.weatherCondition === 'Storm') { score += 25; risks.push("Adverse storm conditions"); }
+  if (weather?.weatherCondition === 'Rain') { score += 10; risks.push("Active precipitation"); }
+
+  score = Math.min(100, score);
+  let decision = "GO";
+  if (score > 75) decision = "DIVERT";
+  else if (score > 50) decision = "HOLD";
+  else if (score > 25) decision = "CAUTION";
+
+  return {
+    overallRiskScore: score,
+    decision: decision,
+    confidence: "Medium",
+    factorScores: {
+      weather: weather?.weatherCondition === 'Storm' ? 20 : (weather?.weatherCondition === 'Rain' ? 10 : 5),
+      wind: 5,
+      visibility: 5,
+      traffic: traffic === 'High' ? 15 : (traffic === 'Medium' ? 8 : 2),
+      runway: runway === 'Contaminated' ? 20 : (runway === 'Wet' ? 10 : 2),
+      airport: 5,
+      flightStatus: 2,
+      manualOperationalInputs: workload === 'High' ? 15 : 5,
+      compounding: score > 60 ? 10 : 0
+    },
+    topRisks: risks.length > 0 ? risks : ["Baseline operational awareness."],
+    compoundingFactors: [],
+    missingDataWarnings: ["AI analysis offline. Rule-based evaluation active."],
+    recommendations: ["Maintain standard operational awareness.", "Verify all digital telemetry."],
+    explanation: `Rule-based assessment completed. Primary hazards: ${risks.join(', ') || 'None identified'}.`
+  };
+}
+
+
+

@@ -1,9 +1,18 @@
 import { NextResponse } from 'next/server';
-import { VertexAI } from '@google-cloud/vertexai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export async function POST(request: Request) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 25000);
+
+  let body: any = {};
   try {
-    const body = await request.json();
+    body = await request.json();
+  } catch (e) {
+    console.error('Failed to parse request body:', e);
+  }
+
+  try {
     const {
       airport,
       runway,
@@ -41,22 +50,23 @@ export async function POST(request: Request) {
       dataSources
     } = body;
 
-    const projectId = process.env.GOOGLE_CLOUD_PROJECT;
-    const location = process.env.GOOGLE_CLOUD_LOCATION || 'us-central1';
+    const apiKey = process.env.GEMINI_API_KEY;
 
-    console.log('Initializing Google Cloud Vertex AI:');
-    console.log('- Project ID:', projectId);
-    console.log('- Location:', location);
-    console.log('- Model:', 'gemini-2.5-flash');
+    if (!apiKey) {
+       clearTimeout(timeoutId);
+       console.error('GEMINI_API_KEY is missing from environment.');
+       return NextResponse.json({
+         success: false,
+         fallback: true,
+         message: "AI unavailable, using fallback logic",
+         data: {
+           briefing: "Operational Briefing:\nPhaseGuard local risk analysis is active. Rule-based caution advised.\n\nPrimary Concern:\nBaseline operational factors.\n\nRecommended Action:\nFollow standard approach procedures.\n\nDecision Check:\nPhaseGuard decision validated by rule engine."
+         }
+       });
+    }
 
-    const vertexAI = new VertexAI({
-      project: projectId,
-      location: location,
-    });
-
-    const generativeModel = vertexAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
-    });
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
     const prompt = `
 You are an expert aviation safety AI assistant for PhaseGuard AI.
@@ -108,25 +118,44 @@ Rules:
 - IMPORTANT: If runway, wind, traffic, and workload are favorable but weather is severe, explicitly state: "Operational inputs are otherwise favorable, but live METAR weather is the dominant hazard." Do not imply all factors are risky.
 `;
 
-    const response = await generativeModel.generateContent(prompt);
+    const result = await model.generateContent(prompt);
     
-    // Safely extract the generated text
-    const text = response.response.candidates?.[0]?.content?.parts?.[0]?.text || "Unable to generate briefing text.";
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('TIMEOUT')), 25000);
+    });
+
+    const responseResult: any = await Promise.race([
+      result.response,
+      timeoutPromise
+    ]);
+
+    clearTimeout(timeoutId);
+
+    const text = responseResult.text() || "Unable to generate briefing text.";
 
     return NextResponse.json({
-      briefing: text
+      success: true,
+      fallback: false,
+      message: "AI analysis completed",
+      data: {
+        briefing: text
+      }
     });
 
   } catch (error: any) {
-    console.error('\n=== VERTEX AI ERROR ===');
-    console.error('Message:', error?.message || error);
-    if (error?.stack) {
-      console.error('Stack:', error.stack);
-    }
-    console.error('========================\n');
+    clearTimeout(timeoutId);
+    const isTimeout = error.message === 'TIMEOUT' || error.name === 'AbortError';
+    console.error(`\n=== GEMINI AI BRIEFING ERROR (${isTimeout ? 'TIMEOUT' : 'GENERAL'}) ===`);
+    console.error(error);
 
     return NextResponse.json({
-      briefing: "Gemini briefing unavailable. Local risk analysis remains available."
-    }, { status: 200 });
+      success: false,
+      fallback: true,
+      message: isTimeout ? "AI request timed out, using fallback logic" : "AI unavailable, using fallback logic",
+      data: {
+        briefing: "Gemini briefing unavailable. Local risk analysis remains available."
+      }
+    });
   }
 }
+

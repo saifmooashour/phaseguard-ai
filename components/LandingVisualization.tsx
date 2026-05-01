@@ -12,6 +12,7 @@ export default function LandingVisualization({
   riskScore = 0,
 }: LandingVisualizationProps) {
   const [planeProgress, setPlaneProgress] = useState(0);
+  const label = "Landing Visualization";
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -19,6 +20,7 @@ export default function LandingVisualization({
     }, 50);
     return () => clearInterval(interval);
   }, []);
+
 
   // Determine path color and deviation intensity based on riskLevel
   let strokeColor = '#10B981'; // green
@@ -58,68 +60,93 @@ export default function LandingVisualization({
   const planeY = 100 + (deviationScale > 0 ? Math.sin((planeProgress / 10) + planeProgress * 0.2) * deviationScale : 0);
 
   return (
-    <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col items-center justify-center w-full my-4 relative overflow-hidden">
-      <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center justify-between w-full border-b border-slate-800 pb-2">
-        <span>{label}</span>
-        <span className={`text-xs px-2 py-0.5 rounded font-mono ${
-          riskLevel === 'Critical' ? 'bg-red-500/20 text-red-400' :
-          riskLevel === 'High' ? 'bg-orange-500/20 text-orange-400' :
-          riskLevel === 'Medium' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-green-500/20 text-green-400'
+    <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-[32px] p-8 shadow-2xl flex flex-col items-center justify-center w-full my-4 relative overflow-hidden group">
+      <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-1000"></div>
+      
+      <div className="text-[11px] font-black text-slate-500 uppercase tracking-[0.2em] mb-6 flex items-center justify-between w-full border-b border-slate-800 pb-4 relative z-10">
+        <div className="flex items-center">
+          <svg className="w-4 h-4 mr-2 text-cyan-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" /></svg>
+          {label}
+        </div>
+        <span className={`text-[10px] px-3 py-1 rounded-lg font-black border ${
+          riskLevel === 'Critical' ? 'bg-red-500/10 text-red-400 border-red-500/30' :
+          riskLevel === 'High' ? 'bg-orange-500/10 text-orange-400 border-orange-500/30' :
+          riskLevel === 'Medium' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30' : 'bg-green-500/10 text-green-400 border-green-500/30'
         }`}>
-          {riskLevel} ({riskScore})
+          {riskLevel.toUpperCase()} ASSESSMENT: {riskScore}
         </span>
       </div>
 
-      <div className="relative w-full max-w-[400px] h-[200px] flex items-center justify-center bg-slate-950/80 rounded-xl border border-slate-800/80 shadow-inner">
-        {/* Runway (Static SVG) */}
-        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 400 200">
-          {/* Horizon */}
-          <line x1="0" y1="100" x2="400" y2="100" stroke="#334155" strokeWidth="1" strokeDasharray="4 4" />
+      <div className="relative w-full max-w-[500px] h-[300px] flex items-center justify-center bg-slate-950 rounded-2xl border border-slate-800 shadow-[inset_0_0_50px_rgba(0,0,0,1)] overflow-hidden">
+        {/* Dynamic Background Grid */}
+        <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle, #334155 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
+        
+        {/* Landing Visualization Canvas */}
+        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 400 200" preserveAspectRatio="xMidYMid meet">
+          {/* Horizon Line */}
+          <line x1="0" y1="100" x2="400" y2="100" stroke="#1e293b" strokeWidth="1" strokeDasharray="4 4" />
           
-          {/* Runway perspective */}
-          <polygon points="150,200 250,200 220,100 180,100" fill="#1E293B" opacity="0.8" />
-          <polygon points="195,200 205,200 202,100 198,100" fill="#FFFFFF" opacity="0.3" />
-          <line x1="150" y1="200" x2="180" y2="100" stroke="#475569" strokeWidth="2" />
-          <line x1="250" y1="200" x2="220" y2="100" stroke="#475569" strokeWidth="2" />
-          
-          {/* Threshold marks */}
-          <line x1="160" y1="190" x2="240" y2="190" stroke="#FFFFFF" strokeWidth="4" />
+          {/* Centered Runway Perspective */}
+          <g transform="translate(200, 100)">
+            {/* Ground / Approach Area */}
+            <path d="M -150,100 L 150,100 L 20,0 L -20,0 Z" fill="#0f172a" />
+            {/* Runway Main Surface */}
+            <path d="M -40,100 L 40,100 L 10,0 L -10,0 Z" fill="#1e293b" stroke="#334155" strokeWidth="0.5" />
+            {/* Centerline */}
+            <line x1="0" y1="100" x2="0" y2="0" stroke="#ffffff" strokeWidth="1" strokeDasharray="10 10" opacity="0.4" />
+            {/* Threshold Marks */}
+            <line x1="-35" y1="95" x2="35" y2="95" stroke="#ffffff" strokeWidth="2" opacity="0.6" />
+            <line x1="-30" y1="85" x2="30" y2="85" stroke="#ffffff" strokeWidth="1.5" opacity="0.4" />
+          </g>
 
-          {/* Oscillating Flight Path */}
-          <path
-            d={generatePath()}
-            fill="none"
-            stroke={strokeColor}
-            strokeWidth="3"
-            strokeLinecap="round"
-            className="transition-all duration-300 ease-in-out"
-          />
-
-          {/* Airplane Icon moving along path */}
-          <g transform={`translate(${planeX - 10}, ${planeY - 10})`} className="transition-all duration-75 ease-linear">
-            {/* Plane SVG */}
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill={strokeColor}
-              className={`drop-shadow-[0_0_8px_${strokeColor}] ${isWarning ? 'animate-pulse' : ''}`}
-            >
-              <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z" />
-            </svg>
+          {/* Oscillating Flight Path (Centered) */}
+          <g transform="translate(0, 0)">
+            <path
+              d={generatePath()}
+              fill="none"
+              stroke={strokeColor}
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              className="transition-all duration-300 ease-in-out opacity-80"
+              style={{ filter: `blur(${isWarning ? '1px' : '0px'})` }}
+            />
+            
+            {/* Airplane Marker */}
+            <g transform={`translate(${planeX}, ${planeY})`}>
+               <circle r="4" fill={strokeColor} className={isWarning ? 'animate-ping' : ''} />
+               <circle r="2" fill="#ffffff" />
+               
+               {/* Aircraft Shape */}
+               <path 
+                 d="M -8,0 L 8,0 M 0,-6 L 0,6 M -4,-2 L -4,2" 
+                 stroke={strokeColor} 
+                 strokeWidth="2" 
+                 strokeLinecap="round" 
+                 transform="rotate(0)"
+                 className="drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]"
+               />
+            </g>
           </g>
         </svg>
 
-        {isWarning && (
-          <div className="absolute top-2 left-2 flex items-center bg-red-500/10 border border-red-500/30 rounded px-2 py-1 text-[8px] font-bold text-red-400 uppercase tracking-widest animate-pulse">
-            ⚠ Unstable Approach Warning
-          </div>
-        )}
+        {/* HUD Markers */}
+        <div className="absolute inset-0 pointer-events-none border border-cyan-500/10 rounded-2xl">
+          <div className="absolute top-4 left-4 font-mono text-[9px] text-cyan-500/50">GS 3.0&deg;</div>
+          <div className="absolute top-4 right-4 font-mono text-[9px] text-cyan-500/50">LOC 0.0</div>
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 font-mono text-[10px] text-slate-500 uppercase tracking-widest">Approach Path Visualizer</div>
+        </div>
       </div>
 
-      <p className="text-[9px] text-slate-500 italic text-center mt-3">
-        Landing Visualization (Pilot Mode Preview — Not a real flight simulation)
-      </p>
+      <div className="mt-6 flex flex-wrap justify-center gap-6 w-full relative z-10">
+        <div className="flex items-center space-x-2">
+          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: strokeColor }}></div>
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Path Stability: {riskLevel === 'Low' ? 'Nominal' : riskLevel === 'Medium' ? 'Unstable' : 'Critical'}</span>
+        </div>
+        <div className="flex items-center space-x-2">
+          <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Telemetry Refresh: 50ms</span>
+        </div>
+      </div>
     </div>
   );
 }
