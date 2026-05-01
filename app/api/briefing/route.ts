@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export async function POST(request: Request) {
   const controller = new AbortController();
@@ -47,9 +46,11 @@ export async function POST(request: Request) {
       selectedAirport,
       weatherData,
       trafficData,
-      dataSources
+      dataSources,
+      cyberIndicator
     } = body;
 
+    console.log("Gemini key loaded:", Boolean(process.env.GEMINI_API_KEY));
     const apiKey = process.env.GEMINI_API_KEY;
 
     if (!apiKey) {
@@ -58,93 +59,109 @@ export async function POST(request: Request) {
        return NextResponse.json({
          success: false,
          fallback: true,
-         message: "AI unavailable, using fallback logic",
-         data: {
-           briefing: "Operational Briefing:\nPhaseGuard local risk analysis is active. Rule-based caution advised.\n\nPrimary Concern:\nBaseline operational factors.\n\nRecommended Action:\nFollow standard approach procedures.\n\nDecision Check:\nPhaseGuard decision validated by rule engine."
-         }
+         message: "GEMINI_API_KEY is missing from environment",
+         briefing: "Operational Briefing:\nPhaseGuard local risk analysis is active. Rule-based caution advised.\n\nPrimary Concern:\nBaseline operational factors.\n\nRecommended Action:\nFollow standard approach procedures.\n\nDecision Check:\nPhaseGuard decision validated by rule engine.",
+         directives: recommendations || aiRecommendations || ["Maintain standard operational awareness.", "Verify all digital telemetry."]
        });
     }
 
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-
     const prompt = `
 You are an expert aviation safety AI assistant for PhaseGuard AI.
-Given the following flight risk assessment data, generate a short, professional aviation safety briefing for the pilot.
+Generate a concise, professional aviation safety briefing for the pilot based on the following mission intelligence.
 
-Data:
+Mission Context:
 - Flight: ${selectedFlight?.flightNumber || flightNumber ? `${selectedFlight?.flightNumber || flightNumber} (${selectedFlight?.airline || airline})` : 'N/A'}
 - Route: ${selectedFlight?.departureIata || departureIata || 'N/A'} to ${selectedFlight?.arrivalIata || arrivalIata || 'N/A'}
-- Status: ${selectedFlight?.status || status || 'N/A'}
-- Airport: ${selectedAirport?.icao || airport || 'N/A'}
-- Runway: ${runway || 'N/A'}
+- Airport: ${selectedAirport?.icao || airport || 'N/A'} (Complexity: ${selectedAirport?.complexity || 'N/A'})
+- Runway: ${runway || 'N/A'} (${selectedAirport?.runwaySurface || 'N/A'})
 - Aircraft: ${selectedFlight?.aircraft || flightAircraft || aircraft || 'N/A'}
-- Traffic Density: ${trafficData?.trafficLevel || traffic || 'N/A'}
-- Crew Workload: ${workload || 'N/A'}
-- Weather: ${weatherData?.weatherCondition || weatherCondition || 'N/A'}
-- Visibility: ${visibilityCategory || 'N/A'}
-- Wind: ${windCategory || 'N/A'}
+- Traffic: ${trafficData?.trafficLevel || traffic || 'N/A'}
+- Weather: ${weatherData?.weatherCondition || weatherCondition || 'N/A'} (Visibility: ${visibilityCategory || 'N/A'}, Wind: ${windCategory || 'N/A'})
+- Cyber Exposure: ${cyberIndicator?.level || 'Low'} (Score: ${cyberIndicator?.score || 'N/A'}) - ${cyberIndicator?.summary || 'N/A'}
 
-Risk Analysis:
-- Score: ${aiRiskResult?.overallRiskScore || aiRiskScore || score || 'N/A'}/100
-- Level: ${level || 'N/A'} (Confidence: ${aiRiskResult?.confidence || aiConfidence || 'N/A'})
-- System Decision: ${operationalRecommendation?.primaryRecommendation || aiRiskResult?.decision || aiDecision || decision || 'N/A'}
-- Operational Reasoning: ${operationalRecommendation?.operationalReasoning ? operationalRecommendation.operationalReasoning.join(', ') : Array.isArray(aiTopRisks) ? aiTopRisks.join(', ') : Array.isArray(topRisks) ? topRisks.join(', ') : 'N/A'}
-- Recommended Pilot Actions: ${operationalRecommendation?.pilotActions ? operationalRecommendation.pilotActions.join(', ') : Array.isArray(aiRecommendations) ? aiRecommendations.join(', ') : Array.isArray(recommendations) ? recommendations.join(', ') : 'N/A'}
-- Dispatcher/Ops Notes: ${operationalRecommendation?.dispatcherNotes ? operationalRecommendation.dispatcherNotes.join(', ') : aiRiskResult?.explanation || aiExplanation || 'N/A'}
+Risk Analysis Result:
+- Overall Risk Score: ${aiRiskResult?.overallRiskScore || aiRiskScore || score || 'N/A'}/100
+- Category: ${level || 'N/A'}
+- Confidence: ${aiRiskResult?.confidence || aiConfidence || 'N/A'}
+- PhaseGuard Decision: ${operationalRecommendation?.primaryRecommendation || aiRiskResult?.decision || aiDecision || decision || 'N/A'}
+- Top Hazards: ${operationalRecommendation?.operationalReasoning ? operationalRecommendation.operationalReasoning.join(', ') : Array.isArray(aiTopRisks) ? aiTopRisks.join(', ') : Array.isArray(topRisks) ? topRisks.join(', ') : 'N/A'}
+- Initial Actions: ${operationalRecommendation?.pilotActions ? operationalRecommendation.pilotActions.join(', ') : Array.isArray(aiRecommendations) ? aiRecommendations.join(', ') : Array.isArray(recommendations) ? recommendations.join(', ') : 'N/A'}
 
-Return a short structured briefing with exactly this format:
+Format your response as a structured text briefing.
+Return exactly and ONLY the following sections in text:
 
 Operational Briefing:
-[Text]
+[Brief overview of mission safety]
 
 Primary Concern:
-[Text]
+[The single most critical hazard]
 
 Recommended Action:
-[Text]
+[Key pilot directive]
 
 Decision Check:
-[Text]
+[Challenge or validate the PhaseGuard decision]
+
+Directives JSON:
+[A simple JSON array of 3-5 specific, short operational directives for the pilot. e.g. ["Verify braking action", "Monitor GPS integrity"]]
 
 Rules:
-- Maximum 90 words
-- Pilot-friendly
-- Direct and professional
-- No long paragraphs
-- Do not repeat every input value
-- Confirm or challenge the PhaseGuard decision
-- Mention compounding risk if present
-- IMPORTANT: If runway, wind, traffic, and workload are favorable but weather is severe, explicitly state: "Operational inputs are otherwise favorable, but live METAR weather is the dominant hazard." Do not imply all factors are risky.
+- Professional, aviation-style tone.
+- Total briefing text (excluding JSON) under 100 words.
+- Do not use markdown code blocks for the JSON section.
 `;
 
-    const result = await model.generateContent(prompt);
-    
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('TIMEOUT')), 25000);
-    });
-
-    const responseResult: any = await Promise.race([
-      result.response,
-      timeoutPromise
-    ]);
+    // Direct REST API Call
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }]
+        }),
+        signal: controller.signal
+      }
+    );
 
     clearTimeout(timeoutId);
 
-    const text = responseResult.text() || "Unable to generate briefing text.";
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Gemini API Error: ${response.status} - ${errText}`);
+    }
+
+    const result = await response.json();
+    const fullText = result.candidates?.[0]?.content?.parts?.[0]?.text || "";
+
+    // Parse the response to split briefing and directives
+    let briefing = "Unable to generate briefing text.";
+    let directives = recommendations || aiRecommendations || [];
+
+    if (fullText.includes("Directives JSON:")) {
+      const parts = fullText.split("Directives JSON:");
+      briefing = parts[0].trim();
+      try {
+        const jsonText = parts[1].trim();
+        directives = JSON.parse(jsonText);
+      } catch (e) {
+        console.error("Failed to parse directives JSON from Gemini response", e);
+      }
+    } else {
+      briefing = fullText.trim();
+    }
 
     return NextResponse.json({
       success: true,
       fallback: false,
       message: "AI analysis completed",
-      data: {
-        briefing: text
-      }
+      briefing,
+      directives
     });
 
   } catch (error: any) {
     clearTimeout(timeoutId);
-    const isTimeout = error.message === 'TIMEOUT' || error.name === 'AbortError';
+    const isTimeout = error.name === 'AbortError';
     console.error(`\n=== GEMINI AI BRIEFING ERROR (${isTimeout ? 'TIMEOUT' : 'GENERAL'}) ===`);
     console.error(error);
 
@@ -152,10 +169,10 @@ Rules:
       success: false,
       fallback: true,
       message: isTimeout ? "AI request timed out, using fallback logic" : "AI unavailable, using fallback logic",
-      data: {
-        briefing: "Gemini briefing unavailable. Local risk analysis remains available."
-      }
+      briefing: "Gemini briefing unavailable. Local risk analysis remains available.",
+      directives: body.recommendations || body.aiRecommendations || ["Maintain standard operational awareness.", "Verify all digital telemetry."]
     });
   }
 }
+
 

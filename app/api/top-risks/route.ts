@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export async function POST(request: Request) {
   const controller = new AbortController();
@@ -13,6 +12,7 @@ export async function POST(request: Request) {
   }
 
   try {
+    console.log("Gemini key loaded:", Boolean(process.env.GEMINI_API_KEY));
     const apiKey = process.env.GEMINI_API_KEY;
 
     if (!apiKey) {
@@ -21,13 +21,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ 
         success: false,
         fallback: true,
-        message: "AI unavailable, using fallback logic",
+        message: "GEMINI_API_KEY is missing from environment",
         data: { risks: generateFallbackRisks(body), source: 'FALLBACK' }
       });
     }
-
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
     const prompt = `
 You are an expert aviation risk evaluator for PhaseGuard AI.
@@ -50,20 +47,28 @@ Requirements:
 }
 `;
 
-    const result = await model.generateContent(prompt);
-    
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('TIMEOUT')), 25000);
-    });
-
-    const responseResult: any = await Promise.race([
-      result.response,
-      timeoutPromise
-    ]);
+    // Direct REST API Call
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }]
+        }),
+        signal: controller.signal
+      }
+    );
 
     clearTimeout(timeoutId);
 
-    let text = responseResult.text() || "{}";
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Gemini API Error: ${response.status} - ${errText}`);
+    }
+
+    const result = await response.json();
+    let text = result.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
     
     // Clean up potential markdown formatting from LLM response
     if (text.startsWith('```json')) {
@@ -101,7 +106,7 @@ Requirements:
 
   } catch (error: any) {
     clearTimeout(timeoutId);
-    const isTimeout = error.message === 'TIMEOUT' || error.name === 'AbortError';
+    const isTimeout = error.name === 'AbortError';
     console.error(`\n=== GEMINI AI TOP RISKS EVALUATOR ERROR (${isTimeout ? 'TIMEOUT' : 'GENERAL'}) ===`);
     console.error(error);
     

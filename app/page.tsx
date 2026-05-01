@@ -52,6 +52,7 @@ export default function Home() {
 
   // Gemini Briefing state
   const [geminiBriefing, setGeminiBriefing] = useState<string | null>(null)
+  const [geminiDirectives, setGeminiDirectives] = useState<string[] | null>(null)
   const [isGeneratingBriefing, setIsGeneratingBriefing] = useState(false)
 
 
@@ -208,14 +209,25 @@ export default function Home() {
     }
   }, [])
 
-  const handleSpeakBriefing = () => {
-    if (!result || !speechSupported || typeof window === 'undefined') return;
+  const speakText = (text: string) => {
+    if (!speechSupported || typeof window === 'undefined') return;
     window.speechSynthesis.cancel();
     setIsSpeaking(true);
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+    window.speechSynthesis.speak(utterance);
+  };
 
+  const handleSpeakBriefing = () => {
+    if (!result) return;
+    
     let textToSpeak = "";
     if (appScreen === 'briefing' && geminiBriefing) {
       textToSpeak = geminiBriefing;
+      if (geminiDirectives && geminiDirectives.length > 0) {
+        textToSpeak += ". Operational Directives: " + geminiDirectives.join(". ");
+      }
     } else {
       const opRec = getOperationalRecommendation();
       if (opRec) {
@@ -230,11 +242,7 @@ export default function Home() {
         textToSpeak = "Risk assessment unavailable.";
       }
     }
-
-    const utterance = new SpeechSynthesisUtterance(textToSpeak);
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
-    window.speechSynthesis.speak(utterance);
+    speakText(textToSpeak);
   };
 
   const handleStopBriefing = () => {
@@ -283,7 +291,8 @@ export default function Home() {
           selectedAirport: airportProfile,
           weatherData,
           trafficData: { trafficLevel: traffic },
-          dataSources: aiRiskResult?._dataSources || result?.dataSources || {}
+          dataSources: aiRiskResult?._dataSources || result?.dataSources || {},
+          cyberIndicator: cyberIndicator
         }),
         signal: controller.signal
       });
@@ -291,9 +300,11 @@ export default function Home() {
       const json = await res.json();
       
       if (json.fallback) {
-        setGeminiBriefing(json.data.briefing + "\n\n(AI fallback mode active)");
+        setGeminiBriefing(json.briefing + "\n\n(AI fallback mode active)");
+        setGeminiDirectives(json.directives || null);
       } else {
-        setGeminiBriefing(json.data.briefing);
+        setGeminiBriefing(json.briefing);
+        setGeminiDirectives(json.directives || null);
       }
     } catch (e) {
       clearTimeout(timeoutId);
@@ -1160,22 +1171,23 @@ export default function Home() {
                         {aiRiskResult?._fallback ? 'AI Fallback Mode Active' : (aiRiskResult && !aiRiskResult._error ? 'AI-Estimated Operational Landing Risk' : 'Rule-Based Fallback')}
                       </div>
                       <div className="flex space-x-2">
-                        {!speechSupported ? null : isSpeaking ? (
+                        {isSpeaking ? (
                           <button onClick={handleStopBriefing} className="flex items-center text-[9px] font-bold bg-red-500/20 text-red-400 border border-red-500/50 px-2 py-1 rounded hover:bg-red-500/30 transition-colors uppercase tracking-widest">
+                            <svg className="w-2.5 h-2.5 mr-1" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></svg>
                             Stop Voice
                           </button>
                         ) : (
-                          <button onClick={() => {
-                            if (!speechSupported || typeof window === 'undefined' || !aiRiskResult || aiRiskResult._error) return;
-                            window.speechSynthesis.cancel();
-                            setIsSpeaking(true);
-                            const text = `AI Risk Assessment. Decision: ${aiRiskResult.decision}. Score: ${aiRiskResult.overallRiskScore}. Confidence: ${aiRiskResult.confidence}. Top risks: ${aiRiskResult.topRisks.join(', ')}. Recommendations: ${aiRiskResult.recommendations.join(', ')}. Explanation: ${aiRiskResult.explanation}`;
-                            const utterance = new SpeechSynthesisUtterance(text);
-                            utterance.onend = () => setIsSpeaking(false);
-                            utterance.onerror = () => setIsSpeaking(false);
-                            window.speechSynthesis.speak(utterance);
-                          }} disabled={!aiRiskResult || aiRiskResult._error} className="flex items-center text-[9px] font-bold bg-cyan-500/20 text-cyan-400 border border-cyan-500/50 px-2 py-1 rounded hover:bg-cyan-500/30 transition-colors uppercase tracking-widest disabled:opacity-50">
-                            Read AI Risk Assessment
+                          <button 
+                            onClick={() => {
+                              if (!aiRiskResult || aiRiskResult._error) return;
+                              const text = `AI Risk Assessment. Decision: ${aiRiskResult.decision}. Score: ${aiRiskResult.overallRiskScore}. Confidence: ${aiRiskResult.confidence}. Top risks: ${aiRiskResult.topRisks.join(', ')}. Recommendations: ${aiRiskResult.recommendations.join(', ')}. Explanation: ${aiRiskResult.explanation}`;
+                              speakText(text);
+                            }} 
+                            disabled={!aiRiskResult || aiRiskResult._error} 
+                            className="flex items-center text-[9px] font-bold bg-cyan-500/20 text-cyan-400 border border-cyan-500/50 px-2 py-1 rounded hover:bg-cyan-500/30 transition-colors uppercase tracking-widest disabled:opacity-50"
+                          >
+                            <svg className="w-2.5 h-2.5 mr-1" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                            Read AI Assessment
                           </button>
                         )}
                       </div>
@@ -1675,7 +1687,24 @@ export default function Home() {
                               <div key={index} className="flex flex-col p-6 border border-slate-800 bg-slate-900/40 rounded-3xl hover:border-cyan-500/30 transition-all group">
                                 <div className="flex items-center mb-4">
                                   <span className="w-8 h-8 rounded-full bg-cyan-900/50 border border-cyan-500/30 text-xs font-black text-cyan-400 flex items-center justify-center mr-3 flex-shrink-0 group-hover:scale-110 transition-transform">{index + 1}</span>
-                                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Priority Risk</span>
+                                  <div className="flex-grow">
+                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Priority Risk</span>
+                                  </div>
+                                  <button 
+                                    onClick={(e) => { 
+                                      e.stopPropagation(); 
+                                      if (isSpeaking) handleStopBriefing();
+                                      else speakText(`Hazard ${index + 1}: ${risk}`); 
+                                    }}
+                                    className={`p-1.5 rounded-lg transition-colors ${isSpeaking ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' : 'hover:bg-cyan-500/20 text-slate-500 hover:text-cyan-400'}`}
+                                    title={isSpeaking ? "Stop Voice" : "Speak Risk"}
+                                  >
+                                    {isSpeaking ? (
+                                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></svg>
+                                    ) : (
+                                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
+                                    )}
+                                  </button>
                                 </div>
                                 <p className="text-sm text-slate-200 leading-relaxed font-medium">{risk}</p>
                               </div>
@@ -1720,6 +1749,20 @@ export default function Home() {
                 </div>
                 
                 <div className="flex items-center gap-4 mt-2">
+                  <button 
+                    onClick={() => {
+                      if (isSpeaking) handleStopBriefing();
+                      else speakText(`Final Recommendation: ${operationalRecommendation?.primaryRecommendation?.replace(/_/g, ' ') || 'N/A'}. Risk Score: ${aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result.score}.`);
+                    }}
+                    className={`flex items-center text-[10px] font-black border px-3 py-1.5 rounded-full transition-all uppercase tracking-widest ${isSpeaking ? 'bg-red-500/20 text-red-400 border-red-500/30 hover:bg-red-500/30' : 'bg-white/10 text-white border-white/20 hover:bg-white/20'}`}
+                  >
+                    {isSpeaking ? (
+                      <svg className="w-3 h-3 mr-1.5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></svg>
+                    ) : (
+                      <svg className="w-3 h-3 mr-1.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                    )}
+                    {isSpeaking ? 'Stop Voice' : 'Play Summary'}
+                  </button>
                   <div className="text-xs font-bold text-slate-400 uppercase tracking-widest bg-slate-950 px-3 py-1 rounded-lg border border-slate-800">
                     Risk Score: <span className="text-white">{aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result.score}</span>
                   </div>
@@ -1746,10 +1789,26 @@ export default function Home() {
 
               {/* Pilot Action Checklist */}
               <div className="lg:col-span-1 bg-slate-900/60 backdrop-blur-xl p-8 rounded-[32px] border border-slate-800 shadow-xl">
-                <h3 className="text-xs font-black text-cyan-400 uppercase tracking-[0.2em] mb-6 flex items-center">
-                  <svg className="w-5 h-5 mr-3 text-cyan-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
-                  Operational Directives
-                </h3>
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-xs font-black text-cyan-400 uppercase tracking-[0.2em] flex items-center">
+                    <svg className="w-5 h-5 mr-3 text-cyan-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                    Operational Directives
+                  </h3>
+                  <button 
+                    onClick={() => {
+                      if (isSpeaking) handleStopBriefing();
+                      else speakText("Operational Directives: " + (geminiDirectives || operationalRecommendation?.pilotActions || []).join(". "));
+                    }}
+                    className={`flex items-center text-[10px] font-black border px-3 py-1.5 rounded-full transition-all uppercase tracking-widest ${isSpeaking ? 'bg-red-500/10 text-red-400 border-red-500/30 hover:bg-red-500/20' : 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30 hover:bg-cyan-500/20'}`}
+                  >
+                    {isSpeaking ? (
+                      <svg className="w-3.5 h-3.5 mr-1.5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></svg>
+                    ) : (
+                      <svg className="w-3.5 h-3.5 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
+                    )}
+                    {isSpeaking ? 'Stop Voice' : 'Play Directives'}
+                  </button>
+                </div>
                 <ul className="space-y-4">
                   {operationalRecommendation?.pilotActions.map((action: string, i: number) => (
                     <li key={i} className="flex items-start bg-slate-950/40 p-4 rounded-2xl border border-slate-800/50 hover:border-cyan-500/30 transition-colors group">
