@@ -185,8 +185,8 @@ function generateFallbackData(body: any) {
   
   if (runway === 'Wet') { score += 15; risks.push("Wet runway surface"); }
   if (runway === 'Contaminated') { score += 30; risks.push("Contaminated runway surface"); }
-  if (traffic === 'Medium') { score += 10; risks.push("Moderate traffic density"); }
-  if (traffic === 'High') { score += 20; risks.push("High traffic density"); }
+  if (traffic === 'Medium') { score += 10; risks.push("Moderate derived traffic density"); }
+  if (traffic === 'High') { score += 20; risks.push("High derived traffic density"); }
   if (workload === 'Medium') { score += 10; risks.push("Elevated crew workload"); }
   if (workload === 'High') { score += 25; risks.push("High crew workload task saturation"); }
   if (aircraft === 'Minor Issue') { score += 20; risks.push("Minor aircraft systems alert"); }

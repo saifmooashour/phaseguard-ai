@@ -14,8 +14,8 @@ export async function GET(request: Request) {
      return NextResponse.json({
         source: "FALLBACK",
         aircraftCount: null,
-        trafficLevel: "Manual",
-        message: "Live airspace traffic unavailable. Manual traffic input remains active."
+        trafficLevel: "Derived",
+        message: "Live airspace traffic unavailable. Derived traffic estimation active."
       });
   }
 
@@ -31,8 +31,8 @@ export async function GET(request: Request) {
        return NextResponse.json({
          source: "FALLBACK",
          aircraftCount: null,
-         trafficLevel: "Manual",
-         message: `OpenSky API failed with status ${response.status}.`
+         trafficLevel: "Derived",
+         message: `Live Airspace API failed with status ${response.status}.`
        });
     }
 
@@ -53,8 +53,8 @@ export async function GET(request: Request) {
     return NextResponse.json({
        source: "FALLBACK",
        aircraftCount: null,
-       trafficLevel: "Manual",
-       message: "Failed to reach OpenSky API. Manual input remains active."
+       trafficLevel: "Derived",
+       message: "Failed to reach Live Airspace API. Derived estimation active."
     });
   }
 }

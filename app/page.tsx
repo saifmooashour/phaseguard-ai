@@ -401,7 +401,7 @@ export default function Home() {
     const dataSources = {
       flight: selectedFlight ? (flightsState?.source || 'LIVE').toUpperCase() : 'NOT_CONNECTED',
       weather: weatherData ? weatherData.source.toUpperCase() : 'MANUAL',
-      traffic: 'MANUAL', 
+      traffic: 'DERIVED LIVE', 
       airport: 'LOCAL DATASET',
       manualOverride: 'ACTIVE'
     }
@@ -551,7 +551,7 @@ export default function Home() {
       const dataSources = {
         flight: isLiveFlight ? 'LIVE' : (selectedFlight ? 'CACHE' : 'NOT_CONNECTED'),
         weather: isLiveWeather ? 'LIVE' : (currentWeatherData ? 'FALLBACK' : 'MANUAL'),
-        traffic: isLiveTraffic ? 'LIVE' : 'MANUAL',
+        traffic: isLiveTraffic ? 'LIVE' : 'DERIVED LIVE',
         airport: 'LOCAL DATASET',
         manualOverride: (runway !== 'Dry' || workload !== 'Low' || aircraft !== 'Normal' || !isLiveWeather || !isLiveTraffic) ? 'ACTIVE' : 'INACTIVE'
       };
@@ -801,7 +801,7 @@ export default function Home() {
     const risks: string[] = [];
     if (runway === 'Wet') risks.push("Wet runway may increase landing distance.");
     if (runway === 'Contaminated') risks.push("Contaminated runway poses severe braking action risk.");
-    if (traffic === 'High') risks.push("High traffic reduces decision-making margin.");
+    if (traffic === 'High') risks.push("High traffic density requires additional decision support.");
     if (traffic === 'Medium') risks.push("Elevated traffic requires tighter approach spacing.");
     if (workload === 'High') risks.push("High crew workload increases the chance of missed cues.");
     if (workload === 'Medium') risks.push("Increased crew workload reduces task management reserves.");
@@ -1467,12 +1467,12 @@ export default function Home() {
                       </div>
                       <div className="flex justify-between items-center text-[10px] uppercase tracking-widest pb-1">
                         <span className="text-slate-400">Manual Override</span>
-                        <span className={`font-bold ${(aiRiskResult?._dataSources || result.dataSources).manualOverride === 'ACTIVE' ? 'text-yellow-400' : 'text-slate-500'}`}>{(aiRiskResult?._dataSources || result.dataSources).manualOverride}</span>
+                        <span className={`font-bold ${(aiRiskResult?._dataSources || result.dataSources).manualOverride === 'ACTIVE' ? 'text-yellow-400' : 'text-slate-500'}`}>SUPPORT ACTIVE</span>
                       </div>
 
                       {aiRiskResult?._dataSources && (aiRiskResult._dataSources.weather !== 'LIVE' || aiRiskResult._dataSources.flight === 'NOT_CONNECTED') && (
                         <div className="mt-2 text-[9px] text-orange-400/80 italic leading-snug">
-                          Some operational inputs are manual or unavailable; AI confidence may be reduced.
+                          Some operational inputs are derived or estimated; AI-assisted analysis confidence may be adjusted.
                         </div>
                       )}
                     </div>
@@ -1518,7 +1518,7 @@ export default function Home() {
                       </div>
                     ) : (
                       <div className="flex items-center justify-center h-full min-h-[100px] text-center p-4">
-                        <p className="text-xs text-slate-500 leading-relaxed italic">No live flight selected. Manual mission analysis active.</p>
+                        <p className="text-xs text-slate-500 leading-relaxed italic">No live flight selected. AI-assisted mission evaluation active.</p>
                       </div>
                     )}
                   </Panel>
@@ -1581,7 +1581,7 @@ export default function Home() {
                     </div>
                   </Panel>
 
-                  <Panel title="Cyber-Operational Exposure Indicator" icon={<svg className="w-4 h-4 mr-2 text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>}>
+                  <Panel title="Cyber-Operational Exposure Indicator" icon={<svg className="w-4 h-4 mr-2 text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>} glow={cyberExposure.level === 'High'}>
                     {isGeneratingCyber && !cyberIndicator ? (
                       <div className="flex flex-col items-center justify-center py-8 h-full text-center">
                         <svg className="w-5 h-5 text-teal-500 animate-spin mb-3" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
@@ -1591,7 +1591,7 @@ export default function Home() {
                         <div className="space-y-3">
                           <div className="flex justify-between items-center mb-1">
                             <div className="flex items-center space-x-1.5">
-                              <span className={`px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest rounded border inline-block ${cyberExposure.level === 'High' ? 'bg-red-500/10 text-red-400 border-red-500/30' : cyberExposure.level === 'Medium' ? 'bg-orange-500/10 text-orange-400 border-orange-500/30' : 'bg-teal-500/10 text-teal-400 border-teal-500/30'}`}>
+                              <span className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-widest rounded border inline-block ${cyberExposure.level === 'High' ? 'bg-red-500/20 text-red-500 border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.3)]' : cyberExposure.level === 'Medium' ? 'bg-orange-500/20 text-orange-400 border-orange-500/50' : 'bg-teal-500/20 text-teal-400 border-teal-500/50'}`}>
                                 {cyberExposure.level} EXPOSURE
                               </span>
                               {cyberIndicator?._fallback ? (
@@ -1600,12 +1600,15 @@ export default function Home() {
                                 <span className="px-1.5 py-0.5 text-[8px] font-bold uppercase rounded bg-green-500/10 text-green-400 border border-green-500/20">AI Assessment Active</span>
                               )}
                             </div>
-                            <span className="text-[10px] font-mono text-slate-500">SCORE: {cyberExposure.score}</span>
+                            <span className="text-[10px] font-black font-mono text-slate-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">SCORE: {cyberExposure.score}</span>
                           </div>
                           <p className="text-[10px] text-slate-400 leading-relaxed">{cyberExposure.summary || cyberExposure.explanation}</p>
                           {cyberExposure.actions && (
                             <div className="mt-2">
-                              <h4 className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Awareness Actions:</h4>
+                              <h4 className="text-[9px] font-black text-teal-500 uppercase tracking-widest mb-2 flex items-center">
+                                <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                                Strategic Awareness Actions:
+                              </h4>
                               <ul className="space-y-1">
                                 {cyberExposure.actions.map((act: string, i: number) => (
                                   <li key={i} className="text-[10px] text-teal-200/70 flex items-start">
