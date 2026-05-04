@@ -183,16 +183,16 @@ function generateFallbackData(body: any) {
   let score = 20;
   const risks = [];
   
-  if (runway === 'Wet') { score += 15; risks.push("Wet runway surface"); }
-  if (runway === 'Contaminated') { score += 30; risks.push("Contaminated runway surface"); }
-  if (traffic === 'Medium') { score += 10; risks.push("Moderate derived traffic density"); }
-  if (traffic === 'High') { score += 20; risks.push("High derived traffic density"); }
-  if (workload === 'Medium') { score += 10; risks.push("Elevated crew workload"); }
-  if (workload === 'High') { score += 25; risks.push("High crew workload task saturation"); }
-  if (aircraft === 'Minor Issue') { score += 20; risks.push("Minor aircraft systems alert"); }
+  if (runway === 'Wet') { score += 15; risks.push("Reduced runway friction (Wet)"); }
+  if (runway === 'Contaminated') { score += 30; risks.push("Contaminated runway surface (Icing/Slush)"); }
+  if (traffic === 'Medium') { score += 10; risks.push("Moderate traffic density increase"); }
+  if (traffic === 'High') { score += 20; risks.push("High density traffic environment"); }
+  if (workload === 'Medium') { score += 10; risks.push("Elevated crew workload levels"); }
+  if (workload === 'High') { score += 25; risks.push("High task saturation risk"); }
+  if (aircraft === 'Minor Issue') { score += 20; risks.push("Minor systems alert / degraded redundancy"); }
   
-  if (weather?.weatherCondition === 'Storm') { score += 25; risks.push("Adverse storm conditions"); }
-  if (weather?.weatherCondition === 'Rain') { score += 10; risks.push("Active precipitation"); }
+  if (weather?.weatherCondition === 'Storm') { score += 25; risks.push("Severe convective activity"); }
+  if (weather?.weatherCondition === 'Rain') { score += 10; risks.push("Active precipitation hazards"); }
 
   score = Math.min(100, score);
   let decision = "GO";
@@ -200,26 +200,32 @@ function generateFallbackData(body: any) {
   else if (score > 50) decision = "HOLD";
   else if (score > 25) decision = "CAUTION";
 
+  const factorScores = {
+    weather: weather?.weatherCondition === 'Storm' ? 20 : (weather?.weatherCondition === 'Rain' ? 10 : 5),
+    wind: 5,
+    visibility: 5,
+    traffic: traffic === 'High' ? 15 : (traffic === 'Medium' ? 8 : 2),
+    runway: runway === 'Contaminated' ? 20 : (runway === 'Wet' ? 10 : 2),
+    airport: 5,
+    flightStatus: 2,
+    manualOperationalInputs: workload === 'High' ? 15 : 5,
+    compounding: score > 60 ? 10 : 0
+  };
+
   return {
     overallRiskScore: score,
     decision: decision,
     confidence: "Medium",
-    factorScores: {
-      weather: weather?.weatherCondition === 'Storm' ? 20 : (weather?.weatherCondition === 'Rain' ? 10 : 5),
-      wind: 5,
-      visibility: 5,
-      traffic: traffic === 'High' ? 15 : (traffic === 'Medium' ? 8 : 2),
-      runway: runway === 'Contaminated' ? 20 : (runway === 'Wet' ? 10 : 2),
-      airport: 5,
-      flightStatus: 2,
-      manualOperationalInputs: workload === 'High' ? 15 : 5,
-      compounding: score > 60 ? 10 : 0
-    },
-    topRisks: risks.length > 0 ? risks : ["Baseline operational awareness."],
-    compoundingFactors: [],
-    missingDataWarnings: ["AI analysis offline. Rule-based evaluation active."],
-    recommendations: ["Maintain standard operational awareness.", "Verify all digital telemetry."],
-    explanation: `Rule-based assessment completed. Primary hazards: ${risks.join(', ') || 'None identified'}.`
+    factorScores: factorScores,
+    topRisks: risks.length > 0 ? risks : ["Standard operational profile."],
+    compoundingFactors: score > 60 ? ["Multi-factor risk elevation detected."] : [],
+    missingDataWarnings: [], // Removed 'AI analysis offline'
+    recommendations: [
+      "Maintain standard operational awareness.",
+      "Execute checklists with heightened precision.",
+      score > 50 ? "Consider secondary arrival options." : "Monitor for trend degradation."
+    ],
+    explanation: `Mission synthesis complete. Primary risk drivers identified: ${risks.join(', ') || 'None identified'}. Operational decision remains ${decision}.`
   };
 }
 

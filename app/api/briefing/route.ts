@@ -56,12 +56,13 @@ export async function POST(request: Request) {
     if (!apiKey) {
        clearTimeout(timeoutId);
        console.error('GEMINI_API_KEY is missing from environment.');
+       const fallback = generateFallbackBriefing(body);
        return NextResponse.json({
          success: false,
          fallback: true,
          message: "GEMINI_API_KEY is missing from environment",
-         briefing: "Operational Briefing:\nPhaseGuard local risk analysis is active. Rule-based caution advised.\n\nPrimary Concern:\nBaseline operational factors.\n\nRecommended Action:\nFollow standard approach procedures.\n\nDecision Check:\nPhaseGuard decision validated by rule engine.",
-         directives: recommendations || aiRecommendations || ["Maintain standard operational awareness.", "Verify all digital telemetry."]
+         briefing: fallback.briefing,
+         directives: fallback.directives
        });
     }
 
@@ -165,14 +166,57 @@ Rules:
     console.error(`\n=== GEMINI AI BRIEFING ERROR (${isTimeout ? 'TIMEOUT' : 'GENERAL'}) ===`);
     console.error(error);
 
+    const fallback = generateFallbackBriefing(body);
     return NextResponse.json({
       success: false,
       fallback: true,
       message: isTimeout ? "AI request timed out, using fallback logic" : "AI unavailable, using fallback logic",
-      briefing: "Gemini briefing unavailable. Local risk analysis remains available.",
-      directives: body.recommendations || body.aiRecommendations || ["Maintain standard operational awareness.", "Verify all digital telemetry."]
+      briefing: fallback.briefing,
+      directives: fallback.directives
     });
   }
+}
+
+function generateFallbackBriefing(body: any) {
+  const { 
+    airport, 
+    weatherCondition, 
+    score, 
+    level, 
+    decision, 
+    topRisks, 
+    aiTopRisks,
+    operationalRecommendation,
+    selectedFlight,
+    flightNumber
+  } = body;
+
+  const currentRisks = operationalRecommendation?.operationalReasoning || aiTopRisks || topRisks || ["Baseline operational hazards."];
+  const primaryHazard = currentRisks[0] || "Standard approach variables.";
+  const flightID = selectedFlight?.flightNumber || flightNumber || "Local Ops";
+  
+  let briefingText = `Operational Briefing:\n`;
+  briefingText += `Mission profile for ${flightID} at ${airport || 'destination'} indicates a ${level || 'Normal'} risk environment with a PhaseGuard score of ${score || 25}.\n\n`;
+  
+  briefingText += `Primary Concern:\n`;
+  briefingText += `${primaryHazard}. Multi-factor monitoring is advised for this arrival phase.\n\n`;
+  
+  briefingText += `Recommended Action:\n`;
+  briefingText += `Maintain stabilized approach criteria. Execute checklists with high precision and verify all landing performance data.\n\n`;
+  
+  briefingText += `Decision Check:\n`;
+  briefingText += `The current PhaseGuard "${decision || 'GO'}" recommendation is validated based on local deterministic safety rules.`;
+
+  const directives = [
+    "Verify final approach speed and configuration",
+    "Monitor crosswind components and runway surface",
+    "Prepare for go-around if stabilized criteria not met"
+  ];
+
+  return {
+    briefing: briefingText,
+    directives: directives
+  };
 }
 
 

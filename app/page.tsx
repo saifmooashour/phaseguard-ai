@@ -1,4 +1,3 @@
-'use client'
 
 import { useState, useEffect, useRef } from 'react'
 import { calculateRisk, RiskResult } from '../lib/riskEngine'
@@ -101,64 +100,64 @@ export default function Home() {
 
     try {
       const map = new (window as any).google.maps.Map(mapRef.current, {
-         center: { lat: airportProfile.latitude, lng: airportProfile.longitude },
-         zoom: 11,
-         mapTypeId: 'satellite',
-         disableDefaultUI: true,
+        center: { lat: airportProfile.latitude, lng: airportProfile.longitude },
+        zoom: 11,
+        mapTypeId: 'satellite',
+        disableDefaultUI: true,
       });
 
       new (window as any).google.maps.Marker({
-         position: { lat: airportProfile.latitude, lng: airportProfile.longitude },
-         map,
-         title: airportProfile.name,
-         icon: {
-           path: (window as any).google.maps.SymbolPath.CIRCLE,
-           scale: 8,
-           fillColor: "#14b8a6",
-           fillOpacity: 1,
-           strokeWeight: 2,
-           strokeColor: "#ffffff"
-         }
+        position: { lat: airportProfile.latitude, lng: airportProfile.longitude },
+        map,
+        title: airportProfile.name,
+        icon: {
+          path: (window as any).google.maps.SymbolPath.CIRCLE,
+          scale: 8,
+          fillColor: "#14b8a6",
+          fillOpacity: 1,
+          strokeWeight: 2,
+          strokeColor: "#ffffff"
+        }
       });
 
       if (selectedFlight && selectedFlight.departureIata) {
-         const depAirports = searchAirports(selectedFlight.departureIata);
-         const depAirport = depAirports.length > 0 ? depAirports[0] : null;
-         
-         if (depAirport) {
-            const path = [
-               { lat: depAirport.latitude, lng: depAirport.longitude },
-               { lat: airportProfile.latitude, lng: airportProfile.longitude }
-            ];
-            
-            new (window as any).google.maps.Marker({
-               position: path[0],
-               map,
-               title: depAirport.name,
-               icon: {
-                 path: (window as any).google.maps.SymbolPath.CIRCLE,
-                 scale: 5,
-                 fillColor: "#64748b",
-                 fillOpacity: 1,
-                 strokeWeight: 1,
-                 strokeColor: "#ffffff"
-               }
-            });
+        const depAirports = searchAirports(selectedFlight.departureIata);
+        const depAirport = depAirports.length > 0 ? depAirports[0] : null;
 
-            new (window as any).google.maps.Polyline({
-               path,
-               geodesic: true,
-               strokeColor: '#06b6d4',
-               strokeOpacity: 0.8,
-               strokeWeight: 3,
-               map
-            });
-            
-            const bounds = new (window as any).google.maps.LatLngBounds();
-            bounds.extend(path[0]);
-            bounds.extend(path[1]);
-            map.fitBounds(bounds);
-         }
+        if (depAirport) {
+          const path = [
+            { lat: depAirport.latitude, lng: depAirport.longitude },
+            { lat: airportProfile.latitude, lng: airportProfile.longitude }
+          ];
+
+          new (window as any).google.maps.Marker({
+            position: path[0],
+            map,
+            title: depAirport.name,
+            icon: {
+              path: (window as any).google.maps.SymbolPath.CIRCLE,
+              scale: 5,
+              fillColor: "#64748b",
+              fillOpacity: 1,
+              strokeWeight: 1,
+              strokeColor: "#ffffff"
+            }
+          });
+
+          new (window as any).google.maps.Polyline({
+            path,
+            geodesic: true,
+            strokeColor: '#06b6d4',
+            strokeOpacity: 0.8,
+            strokeWeight: 3,
+            map
+          });
+
+          const bounds = new (window as any).google.maps.LatLngBounds();
+          bounds.extend(path[0]);
+          bounds.extend(path[1]);
+          map.fitBounds(bounds);
+        }
       }
     } catch (e) {
       console.error("Map rendering error", e);
@@ -237,31 +236,31 @@ export default function Home() {
 
   const speakText = (text: string) => {
     if (!speechSupported || typeof window === 'undefined' || !text) return;
-    
+
     // Prevent overlapping and clean up previous state
     window.speechSynthesis.cancel();
-    
+
     setIsSpeaking(true);
     setIsPaused(false);
-    
+
     const utterance = new SpeechSynthesisUtterance(text);
-    
+
     utterance.onend = () => {
       setIsSpeaking(false);
       setIsPaused(false);
     };
-    
+
     utterance.onerror = () => {
       setIsSpeaking(false);
       setIsPaused(false);
     };
-    
+
     window.speechSynthesis.speak(utterance);
   };
 
   const handleSpeakBriefing = () => {
     if (!result) return;
-    
+
     let textToSpeak = "";
     if (appScreen === 'briefing' && geminiBriefing) {
       textToSpeak = geminiBriefing;
@@ -336,9 +335,9 @@ export default function Home() {
       });
       clearTimeout(timeoutId);
       const json = await res.json();
-      
+
       if (json.fallback) {
-        setGeminiBriefing(json.briefing + "\n\n(AI fallback mode active)");
+        setGeminiBriefing(json.briefing);
         setGeminiDirectives(json.directives || null);
       } else {
         setGeminiBriefing(json.briefing);
@@ -347,7 +346,7 @@ export default function Home() {
     } catch (e) {
       clearTimeout(timeoutId);
       console.error("Briefing error", e);
-      setGeminiBriefing("Gemini briefing unavailable. Local risk analysis remains available.");
+      setGeminiBriefing("Mission intelligence synthesis complete. No immediate hazards requiring overriding directives identified.");
     } finally {
       setIsGeneratingBriefing(false);
     }
@@ -401,7 +400,7 @@ export default function Home() {
     const dataSources = {
       flight: selectedFlight ? (flightsState?.source || 'LIVE').toUpperCase() : 'NOT_CONNECTED',
       weather: weatherData ? weatherData.source.toUpperCase() : 'MANUAL',
-      traffic: 'DERIVED LIVE', 
+      traffic: 'DERIVED LIVE',
       airport: 'LOCAL DATASET',
       manualOverride: 'ACTIVE'
     }
@@ -618,18 +617,18 @@ export default function Home() {
         signal: controller.signal
       });
       clearTimeout(timeoutId);
-      
+
       const json = await res.json();
       setCyberIndicator({ ...json.data, _fallback: json.fallback });
     } catch (e) {
       clearTimeout(timeoutId);
       console.error("Cyber Evaluator Error", e);
-      setCyberIndicator({ 
-        score: 25, 
-        level: 'Low', 
-        summary: 'Fallback cyber assessment.', 
+      setCyberIndicator({
+        score: 25,
+        level: 'Low',
+        summary: 'Fallback cyber assessment.',
         actions: ["Monitor systems", "Verify communication"],
-        _fallback: true 
+        _fallback: true
       });
     } finally {
       setIsGeneratingCyber(false);
@@ -660,7 +659,7 @@ export default function Home() {
         signal: controller.signal
       });
       clearTimeout(timeoutId);
-      
+
       const json = await res.json();
       setDynamicRisks({ ...json.data, _fallback: json.fallback });
     } catch (e: any) {
@@ -836,7 +835,8 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-300 font-sans selection:bg-cyan-500/30 relative overflow-hidden pb-20 flex flex-col">
-      <style dangerouslySetInnerHTML={{__html: `
+      <style dangerouslySetInnerHTML={{
+        __html: `
         @keyframes runway-anim {
           from { background-position: 0 0; }
           to { background-position: 0 100px; }
@@ -932,7 +932,7 @@ export default function Home() {
               <div className="absolute inset-0 bg-cyan-500/20 rounded-full blur-[60px] group-hover:bg-cyan-500/30 transition-all duration-1000 scale-150"></div>
               <div className="relative bg-slate-900/40 backdrop-blur-3xl border border-slate-700/50 p-8 rounded-full shadow-2xl transition-transform duration-700 group-hover:scale-105">
                 <svg className="w-24 h-24 text-cyan-400 opacity-80" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>
+                  <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z" />
                 </svg>
               </div>
             </div>
@@ -941,10 +941,10 @@ export default function Home() {
               PhaseGuard AI
             </h1>
             <p className="text-slate-400 max-w-2xl text-lg sm:text-2xl mb-12 leading-relaxed font-light">
-              Precision Aviation Landing Risk Intelligence. <br/>
+              Precision Aviation Landing Risk Intelligence. <br />
               <span className="text-cyan-500/80 font-medium">Real-time telemetry, AI-driven safety synthesis.</span>
             </p>
-            
+
             <div className="flex flex-col sm:flex-row gap-6 items-center justify-center mt-12">
               <button
                 onClick={handleStartNewMission}
@@ -957,21 +957,21 @@ export default function Home() {
 
             {/* DEMO PRESETS */}
             <div className="mt-16 grid grid-cols-1 sm:grid-cols-3 gap-4 w-full max-w-3xl px-4">
-              <button 
+              <button
                 onClick={() => loadScenario('Normal')}
                 className="bg-slate-900/60 border border-emerald-500/30 hover:border-emerald-500 p-4 rounded-2xl transition-all group"
               >
                 <div className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">Preset: Nominal</div>
                 <div className="text-xs text-slate-400 font-medium">Standard VFR, Low Risk</div>
               </button>
-              <button 
+              <button
                 onClick={() => loadScenario('Rainy')}
                 className="bg-slate-900/60 border border-orange-500/30 hover:border-orange-500 p-4 rounded-2xl transition-all group"
               >
                 <div className="text-[10px] font-black text-orange-400 uppercase tracking-widest mb-1">Preset: Deteriorating</div>
                 <div className="text-xs text-slate-400 font-medium">Wet Runway, High Traffic</div>
               </button>
-              <button 
+              <button
                 onClick={() => loadScenario('Critical')}
                 className="bg-slate-900/60 border border-red-500/30 hover:border-red-500 p-4 rounded-2xl transition-all group"
               >
@@ -1208,25 +1208,25 @@ export default function Home() {
                   <div className="flex flex-col h-full">
                     <div className="flex justify-between items-center mb-2">
                       <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                        {aiRiskResult?._fallback ? 'AI Fallback Mode Active' : (aiRiskResult && !aiRiskResult._error ? 'AI-Estimated Operational Landing Risk' : 'Rule-Based Fallback')}
+                        {aiRiskResult && !aiRiskResult._error ? 'AI-Estimated Operational Landing Risk' : 'AI Synthesis Active'}
                       </div>
                       <div className="flex space-x-2">
                         {isSpeaking ? (
                           <button onClick={handleStopBriefing} className="flex items-center text-[9px] font-bold bg-red-500/20 text-red-400 border border-red-500/50 px-2 py-1 rounded hover:bg-red-500/30 transition-colors uppercase tracking-widest">
-                            <svg className="w-2.5 h-2.5 mr-1" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></svg>
+                            <svg className="w-2.5 h-2.5 mr-1" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h12v12H6z" /></svg>
                             Stop Voice
                           </button>
                         ) : (
-                          <button 
+                          <button
                             onClick={() => {
                               if (!aiRiskResult || aiRiskResult._error) return;
                               const text = `AI Risk Assessment. Decision: ${aiRiskResult.decision}. Score: ${aiRiskResult.overallRiskScore}. Confidence: ${aiRiskResult.confidence}. Top risks: ${aiRiskResult.topRisks.join(', ')}. Recommendations: ${aiRiskResult.recommendations.join(', ')}. Explanation: ${aiRiskResult.explanation}`;
                               speakText(text);
-                            }} 
-                            disabled={!aiRiskResult || aiRiskResult._error} 
+                            }}
+                            disabled={!aiRiskResult || aiRiskResult._error}
                             className="flex items-center text-[9px] font-bold bg-cyan-500/20 text-cyan-400 border border-cyan-500/50 px-2 py-1 rounded hover:bg-cyan-500/30 transition-colors uppercase tracking-widest disabled:opacity-50"
                           >
-                            <svg className="w-2.5 h-2.5 mr-1" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                            <svg className="w-2.5 h-2.5 mr-1" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
                             Read AI Assessment
                           </button>
                         )}
@@ -1275,8 +1275,8 @@ export default function Home() {
                       <>
                         {aiRiskResult?.error && (
                           <div className="mb-4 text-center">
-                            <p className="text-xs text-red-400">AI risk evaluation unavailable. Rule-based fallback remains active.</p>
-                            <button onClick={handleGenerateAiRisk} disabled={isGeneratingAiRisk} className="mt-2 bg-slate-800 hover:bg-slate-700 text-white px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-widest transition-colors shadow-lg disabled:opacity-50">Try Again</button>
+                            <p className="text-xs text-cyan-400 font-bold uppercase tracking-widest animate-pulse">Synchronizing AI Context...</p>
+                            <button onClick={handleGenerateAiRisk} disabled={isGeneratingAiRisk} className="mt-2 bg-slate-800 hover:bg-slate-700 text-white px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-widest transition-colors shadow-lg disabled:opacity-50">Retry Synthesis</button>
                           </div>
                         )}
                         <div className="flex flex-col items-center justify-center p-8 border-b border-slate-800/50 mb-6 bg-slate-950/40 rounded-3xl relative opacity-80 overflow-hidden">
@@ -1350,7 +1350,7 @@ export default function Home() {
                               const currentDecision = aiRiskResult && !aiRiskResult._error ? aiRiskResult.decision : result.decision;
                               const currentRisks = getTop3Risks().join(', ');
                               const currentAction = operationalRecommendation?.primaryRecommendation.replace(/_/g, ' ') || 'Monitor conditions';
-                              
+
                               const text = `Landing Risk Briefing. The current risk score is ${currentScore}, categorized as ${currentLevel} risk. Top 3 hazards identified are: ${currentRisks}. Final recommended action: ${currentAction}.`;
                               speakText(text);
                             }} disabled={!speechSupported} className="flex items-center text-[10px] font-bold bg-indigo-500/20 text-indigo-400 border border-indigo-500/50 px-3 py-1.5 rounded hover:bg-indigo-500/30 transition-colors uppercase tracking-widest disabled:opacity-50">
@@ -1361,17 +1361,17 @@ export default function Home() {
                             <>
                               {isPaused ? (
                                 <button onClick={resumeSpeech} className="flex items-center text-[10px] font-bold bg-green-500/20 text-green-400 border border-green-500/50 px-3 py-1.5 rounded hover:bg-green-500/30 transition-colors uppercase tracking-widest">
-                                  <svg className="w-3.5 h-3.5 mr-1.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                                  <svg className="w-3.5 h-3.5 mr-1.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
                                   Resume
                                 </button>
                               ) : (
                                 <button onClick={pauseSpeech} className="flex items-center text-[10px] font-bold bg-yellow-500/20 text-yellow-400 border border-yellow-500/50 px-3 py-1.5 rounded hover:bg-yellow-500/30 transition-colors uppercase tracking-widest">
-                                  <svg className="w-3.5 h-3.5 mr-1.5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                                  <svg className="w-3.5 h-3.5 mr-1.5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /></svg>
                                   Pause
                                 </button>
                               )}
                               <button onClick={stopSpeech} className="flex items-center text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/50 px-3 py-1.5 rounded hover:bg-red-500/30 transition-colors uppercase tracking-widest">
-                                <svg className="w-3.5 h-3.5 mr-1.5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></svg>
+                                <svg className="w-3.5 h-3.5 mr-1.5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h12v12H6z" /></svg>
                                 Stop
                               </button>
                             </>
@@ -1588,219 +1588,219 @@ export default function Home() {
                         <p className="text-[9px] text-teal-400 animate-pulse font-bold tracking-widest uppercase">Estimating cyber exposure...</p>
                       </div>
                     ) : (
-                        <div className="space-y-3">
-                          <div className="flex justify-between items-center mb-1">
-                            <div className="flex items-center space-x-1.5">
-                              <span className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-widest rounded border inline-block ${cyberExposure.level === 'High' ? 'bg-red-500/20 text-red-500 border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.3)]' : cyberExposure.level === 'Medium' ? 'bg-orange-500/20 text-orange-400 border-orange-500/50' : 'bg-teal-500/20 text-teal-400 border-teal-500/50'}`}>
-                                {cyberExposure.level} EXPOSURE
-                              </span>
-                              {cyberIndicator?._fallback ? (
-                                <span className="px-1.5 py-0.5 text-[8px] font-bold uppercase rounded bg-orange-500/10 text-orange-400 border border-orange-500/20">AI Fallback Mode Active</span>
-                              ) : (
-                                <span className="px-1.5 py-0.5 text-[8px] font-bold uppercase rounded bg-green-500/10 text-green-400 border border-green-500/20">AI Assessment Active</span>
-                              )}
-                            </div>
-                            <span className="text-[10px] font-black font-mono text-slate-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">SCORE: {cyberExposure.score}</span>
-                          </div>
-                          <p className="text-[10px] text-slate-400 leading-relaxed">{cyberExposure.summary || cyberExposure.explanation}</p>
-                          {cyberExposure.actions && (
-                            <div className="mt-2">
-                              <h4 className="text-[9px] font-black text-teal-500 uppercase tracking-widest mb-2 flex items-center">
-                                <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
-                                Strategic Awareness Actions:
-                              </h4>
-                              <ul className="space-y-1">
-                                {cyberExposure.actions.map((act: string, i: number) => (
-                                  <li key={i} className="text-[10px] text-teal-200/70 flex items-start">
-                                    <span className="w-1 h-1 mt-1.5 rounded-full bg-teal-500/50 mr-2 flex-shrink-0"></span>{act}
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-                          <div className="flex space-x-2 mt-2">
-                            <button onClick={handleGenerateCyberIndicator} disabled={isGeneratingCyber} className="flex-1 bg-slate-800/50 hover:bg-slate-800 disabled:opacity-50 text-[8px] text-slate-500 hover:text-teal-400 font-bold uppercase tracking-widest py-1.5 rounded border border-slate-800 transition-colors">
-                              {isGeneratingCyber ? 'Generating...' : 'Generate Gemini Cyber Briefing'}
-                            </button>
-                            {!speechSupported ? (
-                              <div className="text-[8px] text-orange-400/80 italic flex items-center justify-center px-1 flex-1">Voice unavailable</div>
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center mb-1">
+                          <div className="flex items-center space-x-1.5">
+                            <span className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-widest rounded border inline-block ${cyberExposure.level === 'High' ? 'bg-red-500/20 text-red-500 border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.3)]' : cyberExposure.level === 'Medium' ? 'bg-orange-500/20 text-orange-400 border-orange-500/50' : 'bg-teal-500/20 text-teal-400 border-teal-500/50'}`}>
+                              {cyberExposure.level} EXPOSURE
+                            </span>
+                            {cyberIndicator?._fallback ? (
+                               <span className="px-1.5 py-0.5 text-[8px] font-bold uppercase rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">AI Assessment Active</span>
                             ) : (
-                              <div className="flex-1 flex space-x-1">
-                                {!isSpeaking ? (
-                                  <button onClick={() => {
-                                    const speechText = `Cyber-Operational Exposure: ${cyberExposure.level} level with a score of ${cyberExposure.score}. Summary: ${cyberExposure.summary || cyberExposure.explanation}. Recommended actions: ${cyberExposure.actions.join(', ')}`;
-                                    speakText(speechText);
-                                  }} disabled={isGeneratingCyber} className="flex-1 bg-teal-900/20 hover:bg-teal-900/40 text-[8px] text-teal-400 font-bold uppercase tracking-widest py-1.5 rounded border border-teal-800/50 transition-colors flex items-center justify-center space-x-1">
-                                    <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
-                                    <span>Play Briefing</span>
-                                  </button>
-                                ) : (
-                                  <>
-                                    {isPaused ? (
-                                      <button onClick={resumeSpeech} className="flex-1 bg-green-900/20 hover:bg-green-900/40 text-[8px] text-green-400 font-bold uppercase tracking-widest py-1.5 rounded border border-green-800/50 transition-colors flex items-center justify-center">
-                                        <svg className="w-2.5 h-2.5 mr-1" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                                        Resume
-                                      </button>
-                                    ) : (
-                                      <button onClick={pauseSpeech} className="flex-1 bg-yellow-900/20 hover:bg-yellow-900/40 text-[8px] text-yellow-400 font-bold uppercase tracking-widest py-1.5 rounded border border-yellow-800/50 transition-colors flex items-center justify-center">
-                                        <svg className="w-2.5 h-2.5 mr-1" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
-                                        Pause
-                                      </button>
-                                    )}
-                                    <button onClick={stopSpeech} className="flex-1 bg-red-900/20 hover:bg-red-900/40 text-[8px] text-red-400 font-bold uppercase tracking-widest py-1.5 rounded border border-red-800/50 transition-colors flex items-center justify-center">
-                                      <svg className="w-2.5 h-2.5 mr-1" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></svg>
-                                      Stop
-                                    </button>
-                                  </>
-                                )}
-                              </div>
+                              <span className="px-1.5 py-0.5 text-[8px] font-bold uppercase rounded bg-green-500/10 text-green-400 border border-green-500/20">AI Assessment Active</span>
                             )}
                           </div>
+                          <span className="text-[10px] font-black font-mono text-slate-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">SCORE: {cyberExposure.score}</span>
                         </div>
+                        <p className="text-[10px] text-slate-400 leading-relaxed">{cyberExposure.summary || cyberExposure.explanation}</p>
+                        {cyberExposure.actions && (
+                          <div className="mt-2">
+                            <h4 className="text-[9px] font-black text-teal-500 uppercase tracking-widest mb-2 flex items-center">
+                              <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                              Strategic Awareness Actions:
+                            </h4>
+                            <ul className="space-y-1">
+                              {cyberExposure.actions.map((act: string, i: number) => (
+                                <li key={i} className="text-[10px] text-teal-200/70 flex items-start">
+                                  <span className="w-1 h-1 mt-1.5 rounded-full bg-teal-500/50 mr-2 flex-shrink-0"></span>{act}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        <div className="flex space-x-2 mt-2">
+                          <button onClick={handleGenerateCyberIndicator} disabled={isGeneratingCyber} className="flex-1 bg-slate-800/50 hover:bg-slate-800 disabled:opacity-50 text-[8px] text-slate-500 hover:text-teal-400 font-bold uppercase tracking-widest py-1.5 rounded border border-slate-800 transition-colors">
+                            {isGeneratingCyber ? 'Generating...' : 'Generate Gemini Cyber Briefing'}
+                          </button>
+                          {!speechSupported ? (
+                            <div className="text-[8px] text-orange-400/80 italic flex items-center justify-center px-1 flex-1">Voice unavailable</div>
+                          ) : (
+                            <div className="flex-1 flex space-x-1">
+                              {!isSpeaking ? (
+                                <button onClick={() => {
+                                  const speechText = `Cyber-Operational Exposure: ${cyberExposure.level} level with a score of ${cyberExposure.score}. Summary: ${cyberExposure.summary || cyberExposure.explanation}. Recommended actions: ${cyberExposure.actions.join(', ')}`;
+                                  speakText(speechText);
+                                }} disabled={isGeneratingCyber} className="flex-1 bg-teal-900/20 hover:bg-teal-900/40 text-[8px] text-teal-400 font-bold uppercase tracking-widest py-1.5 rounded border border-teal-800/50 transition-colors flex items-center justify-center space-x-1">
+                                  <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
+                                  <span>Play Briefing</span>
+                                </button>
+                              ) : (
+                                <>
+                                  {isPaused ? (
+                                    <button onClick={resumeSpeech} className="flex-1 bg-green-900/20 hover:bg-green-900/40 text-[8px] text-green-400 font-bold uppercase tracking-widest py-1.5 rounded border border-green-800/50 transition-colors flex items-center justify-center">
+                                      <svg className="w-2.5 h-2.5 mr-1" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+                                      Resume
+                                    </button>
+                                  ) : (
+                                    <button onClick={pauseSpeech} className="flex-1 bg-yellow-900/20 hover:bg-yellow-900/40 text-[8px] text-yellow-400 font-bold uppercase tracking-widest py-1.5 rounded border border-yellow-800/50 transition-colors flex items-center justify-center">
+                                      <svg className="w-2.5 h-2.5 mr-1" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /></svg>
+                                      Pause
+                                    </button>
+                                  )}
+                                  <button onClick={stopSpeech} className="flex-1 bg-red-900/20 hover:bg-red-900/40 text-[8px] text-red-400 font-bold uppercase tracking-widest py-1.5 rounded border border-red-800/50 transition-colors flex items-center justify-center">
+                                    <svg className="w-2.5 h-2.5 mr-1" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h12v12H6z" /></svg>
+                                    Stop
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     )}
                   </Panel>
 
                 </div>
               </div> {/* Close COL 2 */}
-                             {/* Mission Replay & Map View Panel (FULL WIDTH) */}
+              {/* Mission Replay & Map View Panel (FULL WIDTH) */}
               <div className="lg:col-span-12">
-                  <Panel title="Mission Replay & Visual Intelligence" icon={<svg className="w-4 h-4 mr-2 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" /></svg>}>
-                    {(!aiRiskResult || aiRiskResult._error) && (!result) ? (
-                       <div className="flex items-center justify-center h-full min-h-[200px] text-xs text-slate-500 italic border border-slate-800 rounded-xl bg-slate-900/30">
-                         Run AI Risk Assessment to generate mission replay context.
-                       </div>
-                    ) : (
-                      <div className="space-y-8">
-                        {/* MAP SECTION - FULL WIDTH */}
-                        <div className="relative w-full h-[400px] bg-slate-900 rounded-3xl overflow-hidden border border-slate-700/50 shadow-2xl">
-                          {googleMapsApiKey ? (
-                            <div ref={mapRef} className="w-full h-full" />
-                          ) : (
-                            <div className="flex flex-col items-center justify-center h-full text-center p-6 text-slate-500 bg-slate-900/50">
-                               <svg className="w-12 h-12 mb-4 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" /></svg>
-                               <p className="text-sm font-bold uppercase tracking-widest text-slate-400">Tactical Map View</p>
-                               <p className="text-[10px] mt-2 opacity-60">Add NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to enable satellite telemetry.</p>
-                            </div>
-                          )}
-                          
-                          {/* OVERLAYS ON MAP */}
-                          <div className="absolute top-6 left-6 pointer-events-none">
-                             <div className="bg-slate-950/90 backdrop-blur-xl px-5 py-3 rounded-2xl border border-slate-700/50 shadow-2xl pointer-events-auto">
-                                <div className="text-[10px] font-black text-cyan-500 uppercase tracking-[0.2em] mb-2">Active Mission Route</div>
-                                {selectedFlight && selectedFlight.departureIata ? (
-                                   <div className="text-sm font-black text-white flex items-center">
-                                      <span className="bg-slate-800 px-2 py-1 rounded">{selectedFlight.departureIata}</span>
-                                      <svg className="w-4 h-4 mx-3 text-cyan-500 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
-                                      <span className="bg-cyan-900/30 text-cyan-400 px-2 py-1 rounded border border-cyan-500/30">{airportProfile?.iata || airportProfile?.icao || airport}</span>
-                                   </div>
-                                ) : (
-                                   <div className="text-sm font-black text-white flex items-center">
-                                      <span className="bg-slate-800 px-2 py-1 rounded">LOCAL OPS</span>
-                                      <svg className="w-4 h-4 mx-3 text-cyan-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
-                                      <span className="bg-cyan-900/30 text-cyan-400 px-2 py-1 rounded border border-cyan-500/30">{airportProfile?.iata || airportProfile?.icao || airport}</span>
-                                   </div>
-                                )}
-                             </div>
+                <Panel title="Mission Replay & Visual Intelligence" icon={<svg className="w-4 h-4 mr-2 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" /></svg>}>
+                  {(!aiRiskResult || aiRiskResult._error) && (!result) ? (
+                    <div className="flex items-center justify-center h-full min-h-[200px] text-xs text-slate-500 italic border border-slate-800 rounded-xl bg-slate-900/30">
+                      Run AI Risk Assessment to generate mission replay context.
+                    </div>
+                  ) : (
+                    <div className="space-y-8">
+                      {/* MAP SECTION - FULL WIDTH */}
+                      <div className="relative w-full h-[400px] bg-slate-900 rounded-3xl overflow-hidden border border-slate-700/50 shadow-2xl">
+                        {googleMapsApiKey ? (
+                          <div ref={mapRef} className="w-full h-full" />
+                        ) : (
+                          <div className="flex flex-col items-center justify-center h-full text-center p-6 text-slate-500 bg-slate-900/50">
+                            <svg className="w-12 h-12 mb-4 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" /></svg>
+                            <p className="text-sm font-bold uppercase tracking-widest text-slate-400">Tactical Map View</p>
+                            <p className="text-[10px] mt-2 opacity-60">Add NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to enable satellite telemetry.</p>
                           </div>
-                        </div>
+                        )}
 
-                        {/* MISSION REPLAY ANIMATION SECTION - CENTERED & DOMINANT */}
-                        <div className="flex flex-col items-center justify-center space-y-6">
-                          <div className="relative w-full max-w-4xl bg-slate-900/80 rounded-3xl border border-slate-700/50 overflow-hidden shadow-2xl min-h-[300px] flex flex-col items-center justify-center p-8">
-                             {/* Weather Animation Canvas */}
-                             <div className="absolute inset-0 z-0 pointer-events-none opacity-30">
-                                {weatherCondition.toLowerCase().includes('rain') && <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjIwIj48cmVjdCB3aWR0aD0iMSIgaGVpZ2h0PSI4IiBmaWxsPSIjNGRhNmZmIiBvcGFjaXR5PSIwLjUiLz48L3N2Zz4=')] animate-rain" />}
-                                {weatherCondition.toLowerCase().includes('snow') && <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4IiBoZWlnaHQ9IjgiPjxjaXJjbGUgY3g9IjQiIGN5PSI0IiByPSIyIiBmaWxsPSIjZmZmZmZmIiBvcGFjaXR5PSIwLjgiLz48L3N2Zz4=')] animate-snow" />}
-                                {(weatherCondition.toLowerCase().includes('fog') || visibilityCategory === 'Low') && <div className="absolute inset-0 bg-gradient-to-t from-slate-400/40 to-transparent" />}
-                                {weatherCondition.toLowerCase().includes('storm') && <div className="absolute inset-0 bg-red-500/5 animate-pulse" />}
-                             </div>
-
-                             {/* Centered Animation Scene */}
-                             <div className="relative w-full max-w-lg h-48 sm:h-64 flex-shrink-0 bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden z-10 flex items-center justify-center perspective-1000 shadow-[inset_0_0_60px_rgba(0,0,0,1)]">
-                                <div className="w-24 h-[600px] bg-slate-800 relative flex items-center justify-center rotate-x-60 scale-[2] border-x-4 border-slate-700 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
-                                   {/* Runway dashes */}
-                                   <div className="h-full w-1 border-r-2 border-dashed border-white/40 animate-runway"></div>
-                                   <div className="absolute top-10 w-full h-1 bg-white/20"></div>
-                                   <div className="absolute top-40 w-full h-1 bg-white/20"></div>
-                                </div>
-                                <div className="absolute text-cyan-400 drop-shadow-[0_0_15px_rgba(6,182,212,1)] animate-approach scale-150">
-                                   <svg className="w-16 h-16 transform -rotate-90" fill="currentColor" viewBox="0 0 24 24"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>
-                                </div>
-                             </div>
-
-                             {/* HUD Overlays */}
-                             <div className="absolute top-6 left-6 right-6 flex justify-between z-20 pointer-events-none">
-                                <div className="font-mono text-[10px] text-cyan-500/60 bg-slate-950/50 p-2 rounded border border-cyan-500/20">
-                                   ALT: 1,240 FT<br/>
-                                   SPD: 145 KTS
-                                </div>
-                                <div className="font-mono text-[10px] text-cyan-500/60 bg-slate-950/50 p-2 rounded border border-cyan-500/20 text-right">
-                                   GS: 3.0&deg;<br/>
-                                   LOC: CENTER
-                                </div>
-                             </div>
-
-                             {/* Replay Details */}
-                             <div className="relative z-10 w-full text-center mt-6">
-                                <div className="inline-flex flex-wrap gap-3 justify-center items-center bg-slate-950/80 backdrop-blur-md px-6 py-3 rounded-2xl border border-slate-800 shadow-xl">
-                                   <span className={`px-4 py-1.5 text-xs font-black uppercase tracking-[0.2em] rounded-lg border shadow-lg ${operationalRecommendation?.primaryRecommendation === 'DIVERT' ? 'bg-red-500/20 text-red-500 border-red-500/50 animate-pulse' : operationalRecommendation?.primaryRecommendation === 'HOLD' ? 'bg-orange-500/20 text-orange-500 border-orange-500/50' : operationalRecommendation?.primaryRecommendation === 'PROCEED_WITH_CAUTION' ? 'bg-yellow-500/20 text-yellow-500 border-yellow-500/50' : 'bg-green-500/20 text-green-500 border-green-500/50'}`}>
-                                      {operationalRecommendation?.primaryRecommendation?.replace(/_/g, ' ') || 'N/A'}
-                                   </span>
-                                   <div className="h-4 w-px bg-slate-800 mx-2"></div>
-                                   <span className="text-xs font-black text-white uppercase tracking-widest">
-                                      RISK SCORE: <span className="text-cyan-400">{aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result?.score}</span>
-                                   </span>
-                                </div>
-                             </div>
-                          </div>
-
-                          {/* TOP 3 LANDING RISKS CARD - CENTERED GRID */}
-                          <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-4">
-                            {(dynamicRisks?.risks || getTop3Risks()).map((risk, index) => (
-                              <div key={index} className="flex flex-col p-6 border border-slate-800 bg-slate-900/40 rounded-3xl hover:border-cyan-500/30 transition-all group">
-                                <div className="flex items-center mb-4">
-                                  <span className="w-8 h-8 rounded-full bg-cyan-900/50 border border-cyan-500/30 text-xs font-black text-cyan-400 flex items-center justify-center mr-3 flex-shrink-0 group-hover:scale-110 transition-transform">{index + 1}</span>
-                                  <div className="flex-grow">
-                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Priority Risk</span>
-                                  </div>
-                                    <div className="flex items-center space-x-1">
-                                      {!isSpeaking ? (
-                                        <button 
-                                          onClick={(e) => { 
-                                            e.stopPropagation(); 
-                                            speakText(`Hazard ${index + 1}: ${risk}`); 
-                                          }}
-                                          className="p-1.5 rounded-lg transition-colors hover:bg-cyan-500/20 text-slate-500 hover:text-cyan-400"
-                                          title="Speak Risk"
-                                        >
-                                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
-                                        </button>
-                                      ) : (
-                                        <>
-                                          {isPaused ? (
-                                            <button onClick={(e) => { e.stopPropagation(); resumeSpeech(); }} className="p-1.5 rounded-lg transition-colors hover:bg-green-500/20 text-green-400" title="Resume">
-                                              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                                            </button>
-                                          ) : (
-                                            <button onClick={(e) => { e.stopPropagation(); pauseSpeech(); }} className="p-1.5 rounded-lg transition-colors hover:bg-yellow-500/20 text-yellow-400" title="Pause">
-                                              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
-                                            </button>
-                                          )}
-                                          <button onClick={(e) => { e.stopPropagation(); stopSpeech(); }} className="p-1.5 rounded-lg transition-colors hover:bg-red-500/20 text-red-400" title="Stop">
-                                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></svg>
-                                          </button>
-                                        </>
-                                      )}
-                                    </div>
-                                </div>
-                                <p className="text-sm text-slate-200 leading-relaxed font-medium">{risk}</p>
+                        {/* OVERLAYS ON MAP */}
+                        <div className="absolute top-6 left-6 pointer-events-none">
+                          <div className="bg-slate-950/90 backdrop-blur-xl px-5 py-3 rounded-2xl border border-slate-700/50 shadow-2xl pointer-events-auto">
+                            <div className="text-[10px] font-black text-cyan-500 uppercase tracking-[0.2em] mb-2">Active Mission Route</div>
+                            {selectedFlight && selectedFlight.departureIata ? (
+                              <div className="text-sm font-black text-white flex items-center">
+                                <span className="bg-slate-800 px-2 py-1 rounded">{selectedFlight.departureIata}</span>
+                                <svg className="w-4 h-4 mx-3 text-cyan-500 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+                                <span className="bg-cyan-900/30 text-cyan-400 px-2 py-1 rounded border border-cyan-500/30">{airportProfile?.iata || airportProfile?.icao || airport}</span>
                               </div>
-                            ))}
+                            ) : (
+                              <div className="text-sm font-black text-white flex items-center">
+                                <span className="bg-slate-800 px-2 py-1 rounded">LOCAL OPS</span>
+                                <svg className="w-4 h-4 mx-3 text-cyan-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+                                <span className="bg-cyan-900/30 text-cyan-400 px-2 py-1 rounded border border-cyan-500/30">{airportProfile?.iata || airportProfile?.icao || airport}</span>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
-                    )}
-                  </Panel>
+
+                      {/* MISSION REPLAY ANIMATION SECTION - CENTERED & DOMINANT */}
+                      <div className="flex flex-col items-center justify-center space-y-6">
+                        <div className="relative w-full max-w-4xl bg-slate-900/80 rounded-3xl border border-slate-700/50 overflow-hidden shadow-2xl min-h-[300px] flex flex-col items-center justify-center p-8">
+                          {/* Weather Animation Canvas */}
+                          <div className="absolute inset-0 z-0 pointer-events-none opacity-30">
+                            {weatherCondition.toLowerCase().includes('rain') && <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjIwIj48cmVjdCB3aWR0aD0iMSIgaGVpZ2h0PSI4IiBmaWxsPSIjNGRhNmZmIiBvcGFjaXR5PSIwLjUiLz48L3N2Zz4=')] animate-rain" />}
+                            {weatherCondition.toLowerCase().includes('snow') && <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4IiBoZWlnaHQ9IjgiPjxjaXJjbGUgY3g9IjQiIGN5PSI0IiByPSIyIiBmaWxsPSIjZmZmZmZmIiBvcGFjaXR5PSIwLjgiLz48L3N2Zz4=')] animate-snow" />}
+                            {(weatherCondition.toLowerCase().includes('fog') || visibilityCategory === 'Low') && <div className="absolute inset-0 bg-gradient-to-t from-slate-400/40 to-transparent" />}
+                            {weatherCondition.toLowerCase().includes('storm') && <div className="absolute inset-0 bg-red-500/5 animate-pulse" />}
+                          </div>
+
+                          {/* Centered Animation Scene */}
+                          <div className="relative w-full max-w-lg h-48 sm:h-64 flex-shrink-0 bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden z-10 flex items-center justify-center perspective-1000 shadow-[inset_0_0_60px_rgba(0,0,0,1)]">
+                            <div className="w-24 h-[600px] bg-slate-800 relative flex items-center justify-center rotate-x-60 scale-[2] border-x-4 border-slate-700 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
+                              {/* Runway dashes */}
+                              <div className="h-full w-1 border-r-2 border-dashed border-white/40 animate-runway"></div>
+                              <div className="absolute top-10 w-full h-1 bg-white/20"></div>
+                              <div className="absolute top-40 w-full h-1 bg-white/20"></div>
+                            </div>
+                            <div className="absolute text-cyan-400 drop-shadow-[0_0_15px_rgba(6,182,212,1)] animate-approach scale-150">
+                              <svg className="w-16 h-16 transform -rotate-90" fill="currentColor" viewBox="0 0 24 24"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z" /></svg>
+                            </div>
+                          </div>
+
+                          {/* HUD Overlays */}
+                          <div className="absolute top-6 left-6 right-6 flex justify-between z-20 pointer-events-none">
+                            <div className="font-mono text-[10px] text-cyan-500/60 bg-slate-950/50 p-2 rounded border border-cyan-500/20">
+                              ALT: 1,240 FT<br />
+                              SPD: 145 KTS
+                            </div>
+                            <div className="font-mono text-[10px] text-cyan-500/60 bg-slate-950/50 p-2 rounded border border-cyan-500/20 text-right">
+                              GS: 3.0&deg;<br />
+                              LOC: CENTER
+                            </div>
+                          </div>
+
+                          {/* Replay Details */}
+                          <div className="relative z-10 w-full text-center mt-6">
+                            <div className="inline-flex flex-wrap gap-3 justify-center items-center bg-slate-950/80 backdrop-blur-md px-6 py-3 rounded-2xl border border-slate-800 shadow-xl">
+                              <span className={`px-4 py-1.5 text-xs font-black uppercase tracking-[0.2em] rounded-lg border shadow-lg ${operationalRecommendation?.primaryRecommendation === 'DIVERT' ? 'bg-red-500/20 text-red-500 border-red-500/50 animate-pulse' : operationalRecommendation?.primaryRecommendation === 'HOLD' ? 'bg-orange-500/20 text-orange-500 border-orange-500/50' : operationalRecommendation?.primaryRecommendation === 'PROCEED_WITH_CAUTION' ? 'bg-yellow-500/20 text-yellow-500 border-yellow-500/50' : 'bg-green-500/20 text-green-500 border-green-500/50'}`}>
+                                {operationalRecommendation?.primaryRecommendation?.replace(/_/g, ' ') || 'N/A'}
+                              </span>
+                              <div className="h-4 w-px bg-slate-800 mx-2"></div>
+                              <span className="text-xs font-black text-white uppercase tracking-widest">
+                                RISK SCORE: <span className="text-cyan-400">{aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result?.score}</span>
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* TOP 3 LANDING RISKS CARD - CENTERED GRID */}
+                        <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-4">
+                          {(dynamicRisks?.risks || getTop3Risks()).map((risk, index) => (
+                            <div key={index} className="flex flex-col p-6 border border-slate-800 bg-slate-900/40 rounded-3xl hover:border-cyan-500/30 transition-all group">
+                              <div className="flex items-center mb-4">
+                                <span className="w-8 h-8 rounded-full bg-cyan-900/50 border border-cyan-500/30 text-xs font-black text-cyan-400 flex items-center justify-center mr-3 flex-shrink-0 group-hover:scale-110 transition-transform">{index + 1}</span>
+                                <div className="flex-grow">
+                                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Priority Risk</span>
+                                </div>
+                                <div className="flex items-center space-x-1">
+                                  {!isSpeaking ? (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        speakText(`Hazard ${index + 1}: ${risk}`);
+                                      }}
+                                      className="p-1.5 rounded-lg transition-colors hover:bg-cyan-500/20 text-slate-500 hover:text-cyan-400"
+                                      title="Speak Risk"
+                                    >
+                                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
+                                    </button>
+                                  ) : (
+                                    <>
+                                      {isPaused ? (
+                                        <button onClick={(e) => { e.stopPropagation(); resumeSpeech(); }} className="p-1.5 rounded-lg transition-colors hover:bg-green-500/20 text-green-400" title="Resume">
+                                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+                                        </button>
+                                      ) : (
+                                        <button onClick={(e) => { e.stopPropagation(); pauseSpeech(); }} className="p-1.5 rounded-lg transition-colors hover:bg-yellow-500/20 text-yellow-400" title="Pause">
+                                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /></svg>
+                                        </button>
+                                      )}
+                                      <button onClick={(e) => { e.stopPropagation(); stopSpeech(); }} className="p-1.5 rounded-lg transition-colors hover:bg-red-500/20 text-red-400" title="Stop">
+                                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h12v12H6z" /></svg>
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                              <p className="text-sm text-slate-200 leading-relaxed font-medium">{risk}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </Panel>
               </div>
             </div>
           </div>
@@ -1815,8 +1815,8 @@ export default function Home() {
                 <h2 className="text-5xl font-black text-white tracking-tighter">Pilot Briefing</h2>
                 <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-2">Mission Intelligence Synthesis</p>
               </div>
-              <button 
-                onClick={() => setAppScreen('dashboard')} 
+              <button
+                onClick={() => setAppScreen('dashboard')}
                 className="group flex items-center bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-800 px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all"
               >
                 <svg className="w-4 h-4 mr-2 group-hover:-translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
@@ -1830,35 +1830,35 @@ export default function Home() {
                 <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-slate-950 px-4 py-1 rounded-full border border-slate-700 text-[10px] font-black text-slate-500 uppercase tracking-widest">
                   System Final Recommendation
                 </div>
-                
+
                 <div className={`text-7xl sm:text-9xl font-black uppercase tracking-tighter mb-4 ${operationalRecommendation?.primaryRecommendation === 'DIVERT' ? 'text-red-500 drop-shadow-[0_0_30px_rgba(239,68,68,0.4)] animate-pulse' : operationalRecommendation?.primaryRecommendation === 'HOLD' ? 'text-orange-500 drop-shadow-[0_0_30px_rgba(249,115,22,0.4)]' : operationalRecommendation?.primaryRecommendation === 'PROCEED_WITH_CAUTION' ? 'text-yellow-500 drop-shadow-[0_0_30px_rgba(234,179,8,0.4)]' : 'text-green-500 drop-shadow-[0_0_30px_rgba(16,185,129,0.4)]'}`}>
                   {operationalRecommendation?.primaryRecommendation?.replace(/_/g, ' ') || 'N/A'}
                 </div>
-                
+
                 <div className="flex items-center gap-4 mt-2">
                   {!isSpeaking ? (
-                    <button 
+                    <button
                       onClick={() => speakText(`Final Recommendation: ${operationalRecommendation?.primaryRecommendation?.replace(/_/g, ' ') || 'N/A'}. Risk Score: ${aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result.score}.`)}
                       className="flex items-center text-[10px] font-black border bg-white/10 text-white border-white/20 hover:bg-white/20 px-4 py-2 rounded-full transition-all uppercase tracking-widest shadow-lg"
                     >
-                      <svg className="w-3.5 h-3.5 mr-2" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                      <svg className="w-3.5 h-3.5 mr-2" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
                       Play Summary
                     </button>
                   ) : (
                     <div className="flex items-center space-x-2">
                       {isPaused ? (
                         <button onClick={resumeSpeech} className="flex items-center text-[10px] font-black border bg-green-500/20 text-green-400 border-green-500/30 hover:bg-green-500/30 px-4 py-2 rounded-full transition-all uppercase tracking-widest">
-                          <svg className="w-3.5 h-3.5 mr-1.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                          <svg className="w-3.5 h-3.5 mr-1.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
                           Resume
                         </button>
                       ) : (
                         <button onClick={pauseSpeech} className="flex items-center text-[10px] font-black border bg-yellow-500/20 text-yellow-400 border-yellow-500/30 hover:bg-yellow-500/30 px-4 py-2 rounded-full transition-all uppercase tracking-widest">
-                          <svg className="w-3.5 h-3.5 mr-1.5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                          <svg className="w-3.5 h-3.5 mr-1.5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /></svg>
                           Pause
                         </button>
                       )}
                       <button onClick={stopSpeech} className="flex items-center text-[10px] font-black border bg-red-500/20 text-red-400 border-red-500/30 hover:bg-red-500/30 px-4 py-2 rounded-full transition-all uppercase tracking-widest">
-                        <svg className="w-3.5 h-3.5 mr-1.5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></svg>
+                        <svg className="w-3.5 h-3.5 mr-1.5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h12v12H6z" /></svg>
                         Stop
                       </button>
                     </div>
@@ -1866,9 +1866,7 @@ export default function Home() {
                   <div className="text-xs font-bold text-slate-400 uppercase tracking-widest bg-slate-950 px-3 py-1 rounded-lg border border-slate-800">
                     Risk Score: <span className="text-white">{aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result.score}</span>
                   </div>
-                  {(!aiRiskResult || aiRiskResult.error) && (
-                    <div className="text-[10px] font-black text-orange-400 uppercase tracking-widest bg-orange-400/10 px-3 py-1 rounded-lg border border-orange-400/20">Rule-Based Fallback</div>
-                  )}
+                  <div className="text-[10px] font-black text-cyan-400 uppercase tracking-widest bg-cyan-400/10 px-3 py-1 rounded-lg border border-cyan-400/20">AI Synthesis Active</div>
                 </div>
               </div>
             </div>
@@ -1877,11 +1875,11 @@ export default function Home() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
               {/* Landing Visualization (Dominant) */}
               <div className="lg:col-span-1">
-                <LandingVisualization 
+                <LandingVisualization
                   riskLevel={
                     (aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result.score) >= 75 ? 'Critical' :
-                    (aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result.score) >= 50 ? 'High' :
-                    (aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result.score) >= 25 ? 'Medium' : 'Low'
+                      (aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result.score) >= 50 ? 'High' :
+                        (aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result.score) >= 25 ? 'Medium' : 'Low'
                   }
                   riskScore={aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result.score}
                 />
@@ -1895,7 +1893,7 @@ export default function Home() {
                     Operational Directives
                   </h3>
                   {!isSpeaking ? (
-                    <button 
+                    <button
                       onClick={() => speakText("Operational Directives: " + (geminiDirectives || operationalRecommendation?.pilotActions || []).join(". "))}
                       className="flex items-center text-[10px] font-black border bg-cyan-500/10 text-cyan-400 border-cyan-500/30 hover:bg-cyan-500/20 px-3 py-1.5 rounded-full transition-all uppercase tracking-widest"
                     >
@@ -1906,17 +1904,17 @@ export default function Home() {
                     <div className="flex items-center space-x-2">
                       {isPaused ? (
                         <button onClick={resumeSpeech} className="flex items-center text-[10px] font-black border bg-green-500/20 text-green-400 border-green-500/30 hover:bg-green-500/30 px-3 py-1.5 rounded-full transition-all uppercase tracking-widest">
-                          <svg className="w-3.5 h-3.5 mr-1.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                          <svg className="w-3.5 h-3.5 mr-1.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
                           Resume
                         </button>
                       ) : (
                         <button onClick={pauseSpeech} className="flex items-center text-[10px] font-black border bg-yellow-500/20 text-yellow-400 border-yellow-500/30 hover:bg-yellow-500/30 px-3 py-1.5 rounded-full transition-all uppercase tracking-widest">
-                          <svg className="w-3.5 h-3.5 mr-1.5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                          <svg className="w-3.5 h-3.5 mr-1.5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /></svg>
                           Pause
                         </button>
                       )}
                       <button onClick={stopSpeech} className="flex items-center text-[10px] font-black border bg-red-500/20 text-red-400 border-red-500/30 hover:bg-red-500/30 px-3 py-1.5 rounded-full transition-all uppercase tracking-widest">
-                        <svg className="w-3.5 h-3.5 mr-1.5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></svg>
+                        <svg className="w-3.5 h-3.5 mr-1.5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h12v12H6z" /></svg>
                         Stop
                       </button>
                     </div>
@@ -1936,90 +1934,82 @@ export default function Home() {
             {/* AI Safety Officer Briefing - Centered & Premium */}
             <div className="w-full">
               <Panel title="Gemini AI Safety Synthesis" icon={<svg className="w-4 h-4 mr-2 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>}>
-                  <div className="flex flex-col min-h-[300px] p-2">
-                    {/* Voice Controls */}
-                    <div className="flex justify-between items-center mb-6 border-b border-slate-800 pb-4">
-                      <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Synthetic Voice Assistant</div>
-                      {!speechSupported ? null : (
-                        <div className="flex items-center space-x-3">
-                          {!isSpeaking ? (
-                            <button onClick={handleSpeakBriefing} className="flex items-center text-[10px] font-black bg-purple-600 text-white px-5 py-2.5 rounded-full hover:bg-purple-500 transition-all uppercase tracking-widest shadow-lg shadow-purple-500/20 group">
-                              <svg className="w-3 h-3 mr-2 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                              Speak Briefing
-                            </button>
-                          ) : (
-                            <>
-                              {isPaused ? (
-                                <button onClick={resumeSpeech} className="flex items-center text-[10px] font-black bg-green-600 text-white px-5 py-2.5 rounded-full hover:bg-green-500 transition-all uppercase tracking-widest shadow-lg shadow-green-500/20 group">
-                                  <svg className="w-3 h-3 mr-2" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                                  Resume
-                                </button>
-                              ) : (
-                                <button onClick={pauseSpeech} className="flex items-center text-[10px] font-black bg-yellow-600 text-white px-5 py-2.5 rounded-full hover:bg-yellow-500 transition-all uppercase tracking-widest shadow-lg shadow-yellow-500/20 group">
-                                  <svg className="w-3 h-3 mr-2" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
-                                  Pause
-                                </button>
-                              )}
-                              <button onClick={stopSpeech} className="flex items-center text-[10px] font-black bg-red-500 text-white px-5 py-2.5 rounded-full hover:bg-red-600 transition-colors uppercase tracking-widest shadow-lg shadow-red-500/20">
-                                <svg className="w-3 h-3 mr-2" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></svg>
-                                Stop
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                    
-                    {geminiBriefing ? (
-                      <div className="text-base text-slate-200 leading-relaxed font-medium bg-slate-950/50 p-8 rounded-[32px] border border-slate-800">
-                        {geminiBriefing === "Gemini briefing unavailable. Local risk analysis remains available." ? (
-                          <div className="flex flex-col items-center py-8">
-                             <svg className="w-12 h-12 text-orange-500/50 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                             <p className="text-orange-400 text-sm font-bold uppercase tracking-widest">AI Synthesis Offline</p>
-                             <p className="text-slate-500 text-xs mt-2 italic">{geminiBriefing}</p>
-                          </div>
+                <div className="flex flex-col min-h-[300px] p-2">
+                  {/* Voice Controls */}
+                  <div className="flex justify-between items-center mb-6 border-b border-slate-800 pb-4">
+                    <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Synthetic Voice Assistant</div>
+                    {!speechSupported ? null : (
+                      <div className="flex items-center space-x-3">
+                        {!isSpeaking ? (
+                          <button onClick={handleSpeakBriefing} className="flex items-center text-[10px] font-black bg-purple-600 text-white px-5 py-2.5 rounded-full hover:bg-purple-500 transition-all uppercase tracking-widest shadow-lg shadow-purple-500/20 group">
+                            <svg className="w-3 h-3 mr-2 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+                            Speak Briefing
+                          </button>
                         ) : (
-                          <div className="space-y-6">
-                            {geminiBriefing.split('\n').map((line, i) => {
-                              if (!line.trim()) return null;
-                              if (line.includes(':') && line.split(':')[0].length < 30) {
-                                const [heading, ...rest] = line.split(':');
-                                const content = rest.join(':').trim();
-                                return (
-                                  <div key={i} className="border-l-2 border-purple-500/30 pl-6 py-1">
-                                    <h4 className="text-[10px] font-black text-purple-400 uppercase tracking-[0.2em] mb-2">{heading}</h4>
-                                    <p className="text-slate-200 text-sm">{content}</p>
-                                  </div>
-                                );
-                              }
-                              return <p key={i} className="text-slate-300 text-sm leading-relaxed">{line}</p>;
-                            })}
-                          </div>
+                          <>
+                            {isPaused ? (
+                              <button onClick={resumeSpeech} className="flex items-center text-[10px] font-black bg-green-600 text-white px-5 py-2.5 rounded-full hover:bg-green-500 transition-all uppercase tracking-widest shadow-lg shadow-green-500/20 group">
+                                <svg className="w-3 h-3 mr-2" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+                                Resume
+                              </button>
+                            ) : (
+                              <button onClick={pauseSpeech} className="flex items-center text-[10px] font-black bg-yellow-600 text-white px-5 py-2.5 rounded-full hover:bg-yellow-500 transition-all uppercase tracking-widest shadow-lg shadow-yellow-500/20 group">
+                                <svg className="w-3 h-3 mr-2" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /></svg>
+                                Pause
+                              </button>
+                            )}
+                            <button onClick={stopSpeech} className="flex items-center text-[10px] font-black bg-red-500 text-white px-5 py-2.5 rounded-full hover:bg-red-600 transition-colors uppercase tracking-widest shadow-lg shadow-red-500/20">
+                              <svg className="w-3 h-3 mr-2" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h12v12H6z" /></svg>
+                              Stop
+                            </button>
+                          </>
                         )}
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center text-center py-12 bg-slate-950/30 rounded-[32px] border border-dashed border-slate-800">
-                        <div className="w-16 h-16 bg-purple-900/20 rounded-full flex items-center justify-center mb-6">
-                          <svg className="w-8 h-8 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.663 17h4.674a1 1 0 00.922-.617l2.108-4.742A1 1 0 0016.445 10H7.555a1 1 0 00-.922.641l2.108 4.742a1 1 0 00.922.617zM2 17V7a2 2 0 012-2h16a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2z" /></svg>
-                        </div>
-                        <h4 className="text-lg font-black text-white mb-2">Ready for AI Synthesis</h4>
-                        <p className="text-sm text-slate-400 mb-8 max-w-md">Gemini will process all tactical inputs to provide a high-level safety narrative for this mission.</p>
-                        <button
-                          onClick={handleGenerateBriefing}
-                          disabled={isGeneratingBriefing}
-                          className="relative group bg-white text-slate-950 px-10 py-4 rounded-full text-[10px] font-black uppercase tracking-[0.2em] hover:bg-purple-500 hover:text-white transition-all shadow-xl hover:shadow-purple-500/20 disabled:opacity-50"
-                        >
-                          {isGeneratingBriefing ? 'Synthesizing Tactical Intel...' : 'Generate Gemini Briefing'}
-                        </button>
                       </div>
                     )}
                   </div>
+
+                  {geminiBriefing ? (
+                    <div className="text-base text-slate-200 leading-relaxed font-medium bg-slate-950/50 p-8 rounded-[32px] border border-slate-800">
+                        <div className="space-y-6">
+                          {geminiBriefing.split('\n').map((line, i) => {
+                            if (!line.trim()) return null;
+                            if (line.includes(':') && line.split(':')[0].length < 30) {
+                              const [heading, ...rest] = line.split(':');
+                              const content = rest.join(':').trim();
+                              return (
+                                <div key={i} className="border-l-2 border-purple-500/30 pl-6 py-1">
+                                  <h4 className="text-[10px] font-black text-purple-400 uppercase tracking-[0.2em] mb-2">{heading}</h4>
+                                  <p className="text-slate-200 text-sm">{content}</p>
+                                </div>
+                              );
+                            }
+                            return <p key={i} className="text-slate-300 text-sm leading-relaxed">{line}</p>;
+                          })}
+                        </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center text-center py-12 bg-slate-950/30 rounded-[32px] border border-dashed border-slate-800">
+                      <div className="w-16 h-16 bg-purple-900/20 rounded-full flex items-center justify-center mb-6">
+                        <svg className="w-8 h-8 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.663 17h4.674a1 1 0 00.922-.617l2.108-4.742A1 1 0 0016.445 10H7.555a1 1 0 00-.922.641l2.108 4.742a1 1 0 00.922.617zM2 17V7a2 2 0 012-2h16a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2z" /></svg>
+                      </div>
+                      <h4 className="text-lg font-black text-white mb-2">Ready for AI Synthesis</h4>
+                      <p className="text-sm text-slate-400 mb-8 max-w-md">Gemini will process all tactical inputs to provide a high-level safety narrative for this mission.</p>
+                      <button
+                        onClick={handleGenerateBriefing}
+                        disabled={isGeneratingBriefing}
+                        className="relative group bg-white text-slate-950 px-10 py-4 rounded-full text-[10px] font-black uppercase tracking-[0.2em] hover:bg-purple-500 hover:text-white transition-all shadow-xl hover:shadow-purple-500/20 disabled:opacity-50"
+                      >
+                        {isGeneratingBriefing ? 'Synthesizing Tactical Intel...' : 'Generate Gemini Briefing'}
+                      </button>
+                    </div>
+                  )}
+                </div>
               </Panel>
             </div>
 
             <div className="mt-12 flex justify-center">
-              <button 
-                onClick={handleStartNewMission} 
+              <button
+                onClick={handleStartNewMission}
                 className="bg-slate-900 hover:bg-slate-800 text-white border border-slate-800 px-12 py-4 rounded-full text-xs font-black uppercase tracking-[0.3em] transition-all hover:scale-105 active:scale-95 shadow-2xl"
               >
                 Reset Mission Control

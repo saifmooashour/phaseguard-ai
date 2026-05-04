@@ -141,14 +141,19 @@ Expected JSON Structure:
 }
 
 function generateFallbackCyber(body: any) {
+  const score = body.currentRiskScore || 20;
+  const isHighRisk = score > 60;
+  
   return {
-    level: 'Low',
-    score: 25,
-    summary: 'Cyber-operational exposure estimated using local fallback logic.',
+    level: isHighRisk ? 'Medium' : 'Low',
+    score: isHighRisk ? 45 : 22,
+    summary: isHighRisk 
+      ? 'Elevated mission complexity increases digital dependency. Cyber-physical vectors (GPS/Nav) should be monitored for anomalies during high-workload phases.'
+      : 'Baseline digital exposure. Systems operating within normal parameters with standard cybersecurity overhead.',
     actions: [
-      'Verify communication channels.',
-      'Monitor abnormal system alerts.',
-      'Maintain standard digital awareness.'
+      'Verify GNSS integrity against ground-based navaids.',
+      'Monitor for unexplained telemetry deviations.',
+      'Maintain "dark-cockpit" digital discipline.'
     ]
   };
 }
