@@ -50,8 +50,11 @@ export async function POST(request: Request) {
       cyberIndicator
     } = body;
 
-    console.log("Gemini key loaded:", Boolean(process.env.GEMINI_API_KEY));
+    console.log("--- Gemini API Call (Briefing) ---");
     const apiKey = process.env.GEMINI_API_KEY;
+    const model = "gemini-2.0-flash";
+    console.log("Gemini key loaded:", Boolean(apiKey));
+    console.log("Gemini model used:", model);
 
     if (!apiKey) {
        clearTimeout(timeoutId);
@@ -114,7 +117,7 @@ Rules:
 
     // Direct REST API Call
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -125,11 +128,13 @@ Rules:
       }
     );
 
+    console.log("Gemini response status:", response.status);
     clearTimeout(timeoutId);
 
     if (!response.ok) {
       const errText = await response.text();
-      throw new Error(`Gemini API Error: ${response.status} - ${errText}`);
+      console.error(`Gemini API Error details: ${response.status} - ${errText}`);
+      throw new Error(`Gemini API Error: ${response.status}`);
     }
 
     const result = await response.json();

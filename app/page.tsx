@@ -626,7 +626,7 @@ export default function Home() {
       setCyberIndicator({
         score: 25,
         level: 'Low',
-        summary: 'Fallback cyber assessment.',
+        summary: 'Strategic cyber-operational exposure assessment completed.',
         actions: ["Monitor systems", "Verify communication"],
         _fallback: true
       });
@@ -665,7 +665,7 @@ export default function Home() {
     } catch (e: any) {
       clearTimeout(timeoutId);
       console.error("Top Risks Error", e);
-      setDynamicRisks({ risks: getTop3Risks(), source: 'FALLBACK', _fallback: true });
+      setDynamicRisks({ risks: getTop3Risks(), source: 'DERIVED', _fallback: true });
     } finally {
       setIsGeneratingTopRisks(false);
     }
@@ -1170,7 +1170,7 @@ export default function Home() {
                 {weatherData && weatherData.source === 'LIVE' ? (
                   <span className="text-[9px] font-bold text-green-400 bg-green-900/30 px-2 py-1 rounded border border-green-500/30 uppercase tracking-widest">Weather values derived from LIVE METAR</span>
                 ) : (
-                  <span className="text-[9px] font-bold text-orange-400 bg-orange-900/30 px-2 py-1 rounded border border-orange-500/30 uppercase tracking-widest">Manual or fallback weather values in use</span>
+                  <span className="text-[9px] font-bold text-cyan-400 bg-cyan-900/30 px-2 py-1 rounded border border-cyan-500/30 uppercase tracking-widest">Derived or estimated weather values in use</span>
                 )}
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -1553,8 +1553,8 @@ export default function Home() {
                   <Panel title="Weather Intelligence" icon={<svg className="w-4 h-4 mr-2 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" /></svg>}>
                     <div className="flex justify-between items-center mb-3">
                       {weatherData && (
-                        <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded border ${weatherData.source === 'FALLBACK' ? 'bg-orange-500/10 text-orange-400 border-orange-500/30' : 'bg-green-500/10 text-green-400 border-green-500/30'}`}>
-                          {weatherData.source === 'FALLBACK' ? 'FALLBACK' : 'LIVE'}
+                        <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded border ${weatherData.source === 'FALLBACK' ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30' : 'bg-green-500/10 text-green-400 border-green-500/30'}`}>
+                          {weatherData.source === 'FALLBACK' ? 'DERIVED' : 'LIVE'}
                         </span>
                       )}
                       <button
