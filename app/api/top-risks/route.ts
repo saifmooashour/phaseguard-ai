@@ -29,9 +29,13 @@ export async function POST(request: Request) {
       });
     }
 
+    console.log(`[Top Risks] Selected Flight: ${body.flight?.flightNumber} - Status: ${body.flight?.status}`);
+
     const prompt = `
 You are an expert aviation risk evaluator for PhaseGuard AI.
-You need to generate the top 3 landing hazards (Operational Reasoning) for the current scenario.
+You need to generate the top 3 landing hazards (Operational Reasoning) for the SPECIFIC mission scenario and flight provided.
+
+CRITICAL: Your output must reflect the specific flight context. A different flight should result in different hazards if applicable.
 
 Data Context:
 ${JSON.stringify(body, null, 2)}
@@ -39,8 +43,8 @@ ${JSON.stringify(body, null, 2)}
 Requirements:
 1. Return exactly 3 risks.
 2. Aviation-focused, specific, concise, and operational.
-3. Explain the top causes behind the decision.
-4. Avoid generic phrases like "baseline operational awareness" unless there are truly no risks.
+3. Explain the top causes behind the decision for THIS SPECIFIC FLIGHT.
+4. If the flight is delayed, unknown, or has a specific status, include its impact on risk.
 5. Return ONLY the following JSON structure without markdown formatting blocks:
 {
   "risks": [

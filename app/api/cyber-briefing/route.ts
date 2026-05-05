@@ -33,9 +33,13 @@ export async function POST(request: Request) {
       });
     }
 
+    console.log(`[Cyber Briefing] Mission Risk Score: ${body.currentRiskScore}`);
+
     const prompt = `
 You are a cybersecurity expert specializing in aviation operational technology (OT) and digital threat assessments for PhaseGuard AI.
-Evaluate the "Cyber-Operational Exposure" for the flight crew using the following real-time mission context.
+Evaluate the "Cyber-Operational Exposure" for the flight crew using the SPECIFIC mission context provided.
+
+CRITICAL: Your analysis must be context-aware. If the mission risk is high, or traffic is high, the cyber-operational exposure should reflect the increased digital dependency and potential for interference.
 
 Mission Context:
 - Airport: ${JSON.stringify(body.airport || 'Unknown')}
@@ -54,7 +58,7 @@ Requirements:
 4. Determine a score from 0 to 100.
 5. Provide a short, actionable, and professional summary (2 sentences max).
 6. Provide 2 or 3 specific, operational cyber-awareness actions.
-7. Tone: Senior aviation consultant, direct, no fluff, no AI-isms.
+7. Tone: Senior aviation consultant, direct, no fluff.
 
 You MUST return EXACTLY a JSON object without markdown blocks.
 {

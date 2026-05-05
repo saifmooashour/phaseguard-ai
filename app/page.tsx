@@ -169,10 +169,10 @@ export default function Home() {
       const decision = aiRiskResult.decision || 'CAUTION';
       const primary: string =
         decision === 'GO' ? 'PROCEED_NORMALLY' :
-        decision === 'CAUTION' ? 'PROCEED_WITH_CAUTION' :
-        decision === 'HOLD' ? 'NO-GO / HOLD' :
-        decision === 'DIVERT' ? 'DIVERT' : 'PROCEED_WITH_CAUTION';
-      
+          decision === 'CAUTION' ? 'PROCEED_WITH_CAUTION' :
+            decision === 'HOLD' ? 'NO-GO / HOLD' :
+              decision === 'DIVERT' ? 'DIVERT' : 'PROCEED_WITH_CAUTION';
+
       return {
         primaryRecommendation: primary,
         alternativeRecommendation: aiRiskResult.alternative || (decision === 'GO' ? 'Monitor conditions' : decision === 'CAUTION' ? 'Hold or Divert if conditions worsen' : 'Divert'),
@@ -182,15 +182,15 @@ export default function Home() {
         missingDataWarnings: aiRiskResult.missingDataWarnings || []
       };
     }
-    
+
     if (result) {
       const decision = result.decision || 'CAUTION';
       const primary: string =
         decision === 'GO' ? 'PROCEED_NORMALLY' :
-        decision === 'CAUTION' ? 'PROCEED_WITH_CAUTION' :
-        decision === 'HOLD' ? 'NO-GO / HOLD' :
-        decision === 'DIVERT' ? 'DIVERT' : 'PROCEED_WITH_CAUTION';
-      
+          decision === 'CAUTION' ? 'PROCEED_WITH_CAUTION' :
+            decision === 'HOLD' ? 'NO-GO / HOLD' :
+              decision === 'DIVERT' ? 'DIVERT' : 'PROCEED_WITH_CAUTION';
+
       return {
         primaryRecommendation: primary,
         alternativeRecommendation: decision === 'GO' ? 'Monitor conditions' : decision === 'CAUTION' ? 'Hold or Divert if conditions worsen' : 'Divert',
@@ -200,7 +200,7 @@ export default function Home() {
         missingDataWarnings: []
       };
     }
-    
+
     return null;
   };
 
@@ -803,7 +803,13 @@ export default function Home() {
   const handlePrepareMissionData = () => {
     console.log("Mission data prepared.");
     if (selectedFlight && selectedFlight.aircraft) {
-      setAircraft(selectedFlight.aircraft.includes('Boeing') || selectedFlight.aircraft.includes('Airbus') ? 'Normal' : 'Normal');
+      const ac = selectedFlight.aircraft.toLowerCase();
+      // If the aircraft string contains keywords that might suggest a different status (rare in this data, but good for demo)
+      if (ac.includes('unknown') || ac.includes('n/a')) {
+        setAircraft('Normal'); // Default to normal
+      } else {
+        setAircraft('Normal'); 
+      }
     }
     if (airportProfile) {
       setRunway(airportProfile.runwaySurface === 'Asphalt' || airportProfile.runwaySurface === 'Concrete' ? 'Dry' : 'Wet');
@@ -1295,10 +1301,10 @@ export default function Home() {
                       </>
                     ) : (
                       <>
-                          <div className="mb-4 text-center">
-                            <p className="text-xs text-cyan-400 font-bold uppercase tracking-widest animate-pulse">Synchronizing AI Context...</p>
-                            <button onClick={handleGenerateAiRisk} disabled={isGeneratingAiRisk} className="mt-2 bg-slate-800 hover:bg-slate-700 text-white px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-widest transition-colors shadow-lg disabled:opacity-50">Synchronize Assessment</button>
-                          </div>
+                        <div className="mb-4 text-center">
+                          <p className="text-xs text-cyan-400 font-bold uppercase tracking-widest animate-pulse">Synchronizing AI Context...</p>
+                          <button onClick={handleGenerateAiRisk} disabled={isGeneratingAiRisk} className="mt-2 bg-slate-800 hover:bg-slate-700 text-white px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-widest transition-colors shadow-lg disabled:opacity-50">Synchronize Assessment</button>
+                        </div>
                         <div className="flex flex-col items-center justify-center p-8 border-b border-slate-800/50 mb-6 bg-slate-950/40 rounded-3xl relative opacity-80 overflow-hidden">
                           <RiskGauge score={result.score} level={result.level} decision={result.decision} />
                         </div>
@@ -1508,6 +1514,9 @@ export default function Home() {
                           </div>
                           <div className="text-right">
                             <div className={`text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border inline-block ${selectedFlight.status === 'scheduled' || selectedFlight.status === 'active' ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30'}`}>
+                                <span className={`text-[8px] font-black uppercase rounded border px-1.5 py-0.5 ${(aiRiskResult?._dataSources || result.dataSources).flight === 'LIVE' ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30'}`}>
+                                  {(aiRiskResult?._dataSources || result.dataSources).flight === 'LIVE' ? 'LIVE DATA' : 'DEMO DATASET'}
+                                </span>
                               {selectedFlight.status}
                             </div>
                             {flightsState?.source && (
@@ -1725,54 +1734,30 @@ export default function Home() {
                       </div>
 
                       {/* MISSION REPLAY ANIMATION SECTION - CENTERED & DOMINANT */}
-                      <div className="flex flex-col items-center justify-center space-y-6">
-                        <div className="relative w-full max-w-4xl bg-slate-900/80 rounded-3xl border border-slate-700/50 overflow-hidden shadow-2xl min-h-[300px] flex flex-col items-center justify-center p-8">
-                          {/* Weather Animation Canvas */}
-                          <div className="absolute inset-0 z-0 pointer-events-none opacity-30">
-                            {weatherCondition.toLowerCase().includes('rain') && <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjIwIj48cmVjdCB3aWR0aD0iMSIgaGVpZ2h0PSI4IiBmaWxsPSIjNGRhNmZmIiBvcGFjaXR5PSIwLjUiLz48L3N2Zz4=')] animate-rain" />}
-                            {weatherCondition.toLowerCase().includes('snow') && <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4IiBoZWlnaHQ9IjgiPjxjaXJjbGUgY3g9IjQiIGN5PSI0IiByPSIyIiBmaWxsPSIjZmZmZmZmIiBvcGFjaXR5PSIwLjgiLz48L3N2Zz4=')] animate-snow" />}
-                            {(weatherCondition.toLowerCase().includes('fog') || visibilityCategory === 'Low') && <div className="absolute inset-0 bg-gradient-to-t from-slate-400/40 to-transparent" />}
-                            {weatherCondition.toLowerCase().includes('storm') && <div className="absolute inset-0 bg-red-500/5 animate-pulse" />}
-                          </div>
+                      <div className="flex flex-col items-center justify-center space-y-2">
+                        <LandingVisualization 
+                          mode="dashboard"
+                          riskLevel={
+                            (aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result?.score || 0) >= 75 ? 'Critical' :
+                            (aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result?.score || 0) >= 50 ? 'High' :
+                            (aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result?.score || 0) >= 25 ? 'Medium' : 'Low'
+                          }
+                          riskScore={aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result?.score || 0}
+                        />
 
-                          {/* Centered Animation Scene */}
-                          <div className="relative w-full max-w-lg h-48 sm:h-64 flex-shrink-0 bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden z-10 flex items-center justify-center perspective-1000 shadow-[inset_0_0_60px_rgba(0,0,0,1)]">
-                            <div className="w-24 h-[600px] bg-slate-800 relative flex items-center justify-center rotate-x-60 scale-[2] border-x-4 border-slate-700 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
-                              {/* Runway dashes */}
-                              <div className="h-full w-1 border-r-2 border-dashed border-white/40 animate-runway"></div>
-                              <div className="absolute top-10 w-full h-1 bg-white/20"></div>
-                              <div className="absolute top-40 w-full h-1 bg-white/20"></div>
-                            </div>
-                            <div className="absolute text-cyan-400 drop-shadow-[0_0_15px_rgba(6,182,212,1)] animate-approach scale-150">
-                              <svg className="w-16 h-16 transform -rotate-90" fill="currentColor" viewBox="0 0 24 24"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z" /></svg>
-                            </div>
-                          </div>
-
-                          {/* HUD Overlays */}
-                          <div className="absolute top-6 left-6 right-6 flex justify-between z-20 pointer-events-none">
-                            <div className="font-mono text-[10px] text-cyan-500/60 bg-slate-950/50 p-2 rounded border border-cyan-500/20">
-                              ALT: 1,240 FT<br />
-                              SPD: 145 KTS
-                            </div>
-                            <div className="font-mono text-[10px] text-cyan-500/60 bg-slate-950/50 p-2 rounded border border-cyan-500/20 text-right">
-                              GS: 3.0&deg;<br />
-                              LOC: CENTER
-                            </div>
-                          </div>
-
-                          {/* Replay Details */}
-                          <div className="relative z-10 w-full text-center mt-6">
-                            <div className="inline-flex flex-wrap gap-3 justify-center items-center bg-slate-950/80 backdrop-blur-md px-6 py-3 rounded-2xl border border-slate-800 shadow-xl">
-                              <span className={`px-4 py-1.5 text-xs font-black uppercase tracking-[0.2em] rounded-lg border shadow-lg ${operationalRecommendation?.primaryRecommendation === 'DIVERT' ? 'bg-red-500/20 text-red-500 border-red-500/50 animate-pulse' : operationalRecommendation?.primaryRecommendation === 'HOLD' ? 'bg-orange-500/20 text-orange-500 border-orange-500/50' : operationalRecommendation?.primaryRecommendation === 'PROCEED_WITH_CAUTION' ? 'bg-yellow-500/20 text-yellow-500 border-yellow-500/50' : 'bg-green-500/20 text-green-500 border-green-500/50'}`}>
-                                {operationalRecommendation?.primaryRecommendation?.replace(/_/g, ' ') || 'N/A'}
-                              </span>
-                              <div className="h-4 w-px bg-slate-800 mx-2"></div>
-                              <span className="text-xs font-black text-white uppercase tracking-widest">
-                                RISK SCORE: <span className="text-cyan-400">{aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result?.score}</span>
-                              </span>
-                            </div>
+                        {/* Replay Details */}
+                        <div className="relative z-10 w-full text-center mt-2">
+                          <div className="inline-flex flex-wrap gap-3 justify-center items-center bg-slate-950/80 backdrop-blur-md px-6 py-3 rounded-2xl border border-slate-800 shadow-xl">
+                            <span className={`px-4 py-1.5 text-xs font-black uppercase tracking-[0.2em] rounded-lg border shadow-lg ${operationalRecommendation?.primaryRecommendation === 'DIVERT' ? 'bg-red-500/20 text-red-500 border-red-500/50 animate-pulse' : operationalRecommendation?.primaryRecommendation === 'HOLD' ? 'bg-orange-500/20 text-orange-500 border-orange-500/50' : operationalRecommendation?.primaryRecommendation === 'PROCEED_WITH_CAUTION' ? 'bg-yellow-500/20 text-yellow-500 border-yellow-500/50' : 'bg-green-500/20 text-green-500 border-green-500/50'}`}>
+                              {operationalRecommendation?.primaryRecommendation?.replace(/_/g, ' ') || 'N/A'}
+                            </span>
+                            <div className="h-4 w-px bg-slate-800 mx-2"></div>
+                            <span className="text-xs font-black text-white uppercase tracking-widest">
+                              RISK SCORE: <span className="text-cyan-400">{aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result?.score}</span>
+                            </span>
                           </div>
                         </div>
+                      </div>
 
                         {/* TOP 3 LANDING RISKS CARD - CENTERED GRID */}
                         <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1818,7 +1803,6 @@ export default function Home() {
                           ))}
                         </div>
                       </div>
-                    </div>
                   )}
                 </Panel>
               </div>
@@ -1896,6 +1880,7 @@ export default function Home() {
               {/* Landing Visualization (Dominant) */}
               <div className="lg:col-span-1">
                 <LandingVisualization
+                  mode="pilot"
                   riskLevel={
                     (aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result.score) >= 75 ? 'Critical' :
                       (aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result.score) >= 50 ? 'High' :

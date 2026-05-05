@@ -50,7 +50,7 @@ export async function POST(request: Request) {
       cyberIndicator
     } = body;
 
-    console.log("--- Gemini API Call (Briefing) ---");
+    console.log(`[Briefing] Selected Flight: ${selectedFlight?.flightNumber || flightNumber} - Status: ${selectedFlight?.status || status}`);
     const apiKey = process.env.GEMINI_API_KEY;
     const model = "gemini-2.0-flash";
     console.log("Gemini key loaded:", Boolean(apiKey));
@@ -71,10 +71,13 @@ export async function POST(request: Request) {
 
     const prompt = `
 You are an expert aviation safety AI assistant for PhaseGuard AI.
-Generate a concise, professional aviation safety briefing for the pilot based on the following mission intelligence.
+Generate a CONTEXT-AWARE, professional aviation safety briefing for the pilot based on the SPECIFIC mission intelligence provided.
+
+CRITICAL: The briefing must reflect the specific flight selected. If the flight is delayed, unknown, or has a specific status, your briefing MUST reflect how this affects the mission safety. Do not provide generic briefings.
 
 Mission Context:
 - Flight: ${selectedFlight?.flightNumber || flightNumber ? `${selectedFlight?.flightNumber || flightNumber} (${selectedFlight?.airline || airline})` : 'N/A'}
+- Flight Status: ${selectedFlight?.status || status || 'N/A'}
 - Route: ${selectedFlight?.departureIata || departureIata || 'N/A'} to ${selectedFlight?.arrivalIata || arrivalIata || 'N/A'}
 - Airport: ${selectedAirport?.icao || airport || 'N/A'} (Complexity: ${selectedAirport?.complexity || 'N/A'})
 - Runway: ${runway || 'N/A'} (${selectedAirport?.runwaySurface || 'N/A'})
@@ -94,10 +97,10 @@ Tone: Professional, direct, aviation-style dispatcher/safety officer notes. No g
 Sections to return:
 
 Operational Briefing:
-[A concise but expanded operational explanation (2-4 sentences) of the mission safety status. Explain WHY the decision was made.]
+[A concise but expanded operational explanation (2-4 sentences) of the mission safety status for THIS SPECIFIC FLIGHT. Explain WHY the decision was made, referencing the flight context.]
 
 Primary Concern:
-[The single most critical hazard and its operational context.]
+[The single most critical hazard for THIS SPECIFIC MISSION and its operational context.]
 
 Recommended Action:
 [Key practical, action-oriented pilot directive.]
@@ -109,8 +112,9 @@ Directives JSON:
 [A simple JSON array of 3-5 specific, short operational directives for the pilot. e.g. ["Verify braking action", "Monitor GPS integrity"]]
 
 Rules:
-- Total briefing text (excluding JSON) under 120 words.
+- Total briefing text (excluding JSON) under 150 words.
 - Do not use markdown code blocks for the JSON section.
+- Be specific to the flight and current data.
 `;
 
     // Direct REST API Call

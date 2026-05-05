@@ -22,10 +22,51 @@ export async function GET(request: Request) {
 
   if (!apiKey) {
     console.log(`[Flights API] Aviationstack key missing. ICAO: ${icao}, Type: ${type}`);
+    const demoFlights = [
+      {
+        id: 'DEMO1',
+        flightNumber: 'PG101',
+        airline: 'Phase Air',
+        departureIata: 'LHR',
+        arrivalIata: icao.toUpperCase(),
+        departureAirport: 'London Heathrow',
+        arrivalAirport: 'Destination',
+        status: 'scheduled',
+        scheduledTime: new Date().toISOString(),
+        estimatedTime: new Date().toISOString(),
+        aircraft: 'Airbus A320'
+      },
+      {
+        id: 'DEMO2',
+        flightNumber: 'PG202',
+        airline: 'Guard Airways',
+        departureIata: 'DXB',
+        arrivalIata: icao.toUpperCase(),
+        departureAirport: 'Dubai International',
+        arrivalAirport: 'Destination',
+        status: 'delayed',
+        scheduledTime: new Date(Date.now() - 3600000).toISOString(),
+        estimatedTime: new Date(Date.now() + 1800000).toISOString(),
+        aircraft: 'Boeing 737'
+      },
+      {
+        id: 'DEMO3',
+        flightNumber: 'PG303',
+        airline: 'Safe Sky',
+        departureIata: 'JFK',
+        arrivalIata: icao.toUpperCase(),
+        departureAirport: 'John F. Kennedy',
+        arrivalAirport: 'Destination',
+        status: 'unknown',
+        scheduledTime: new Date(Date.now() - 7200000).toISOString(),
+        estimatedTime: new Date(Date.now() - 3600000).toISOString(),
+        aircraft: 'Boeing 777'
+      }
+    ];
     return NextResponse.json({
-      source: "NOT_CONNECTED",
-      flights: [],
-      message: "Live flight schedule API not connected yet."
+      source: "DEMO_MODE",
+      flights: demoFlights,
+      message: "Using meaningfully varied demo flights (Live API not connected)."
     });
   }
 
