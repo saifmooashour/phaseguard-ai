@@ -176,9 +176,9 @@ export default function Home() {
       return {
         primaryRecommendation: primary,
         alternativeRecommendation: aiRiskResult.alternative || (decision === 'GO' ? 'Monitor conditions' : decision === 'CAUTION' ? 'Hold or Divert if conditions worsen' : 'Divert'),
-        operationalReasoning: aiRiskResult.topRisks || [],
-        pilotActions: aiRiskResult.recommendations || [],
-        dispatcherNotes: aiRiskResult.explanation ? [aiRiskResult.explanation] : [],
+        operationalReasoning: aiRiskResult.operationalReasoning ? [aiRiskResult.operationalReasoning] : (aiRiskResult.topRisks || []),
+        pilotActions: aiRiskResult.pilotActions || aiRiskResult.recommendations || [],
+        dispatcherNotes: aiRiskResult.dispatcherNotes ? [aiRiskResult.dispatcherNotes] : (aiRiskResult.explanation ? [aiRiskResult.explanation] : []),
         missingDataWarnings: aiRiskResult.missingDataWarnings || []
       };
     }
@@ -377,6 +377,8 @@ export default function Home() {
     setAiBriefing(null)
     setAiRiskResult(null)
     setDynamicRisks(null)
+    setCyberIndicator(null)
+    setAiDirectives(null)
 
     const dataSources = {
       flight: selectedFlight ? (flightsState?.source || 'LIVE').toUpperCase() : 'NOT_CONNECTED',

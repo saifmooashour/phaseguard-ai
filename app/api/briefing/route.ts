@@ -15,9 +15,10 @@ export async function POST(request: Request) {
   const flight = selectedFlight || { flightNumber, airline, departureIata, arrivalIata, status, scheduledTime };
   const apiKey = process.env.GROQ_API_KEY;
   const model = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+  console.log("--------------------------------------------------");
   console.log("[Groq Debug] Route: /api/briefing");
+  console.log(`[Groq Debug] Flight: ${flight.flightNumber} | Status: ${flight.status}`);
   console.log("[Groq Debug] Key loaded:", !!apiKey);
-  console.log("[Groq Debug] Key preview:", apiKey?.slice(0, 8));
   console.log("[Groq Debug] Model used:", model);
 
   if (!apiKey) {
@@ -35,24 +36,33 @@ export async function POST(request: Request) {
 
     console.log("[Groq Debug] Request sent");
     const prompt = `
-Analyze the SELECTED FLIGHT SPECIFICALLY: ${flight.flightNumber} (${flight.airline}) from ${flight.departureIata} to ${flight.arrivalIata}.
+Analyze the SELECTED FLIGHT SPECIFICALLY: ${flight.flightNumber} (${flight.airline}) from ${flight.departureIata || 'N/A'} to ${flight.arrivalIata || 'N/A'}.
 
-Analyze this specific selected flight and mission context. Do not return generic output. Your response must change based on flight status, route, airport, weather, runway, traffic, workload, aircraft status, and data confidence.
+Analyze this specific selected flight and mission context. Do not return generic output. Your response must change based on flight status (${flight.status}), route, airport, weather, runway, traffic, workload, aircraft status, and data confidence.
 
-Mention the flight number, airline, route, and current status (${flight.status}) in your explanation.
+Mention the flight number ${flight.flightNumber}, airline, route, and current status in your explanation.
 
 Mission Context:
 - Risk Score: ${body.aiRiskScore || body.score || 0}/100
 - Decision: ${body.aiDecision || body.decision || 'N/A'}
 - Hazards: ${JSON.stringify(body.aiTopRisks || body.topRisks || [])}
 
-Format your response as a structured text briefing. Sections to return:
-Operational Briefing: [2-4 sentences explaining mission safety for THIS SPECIFIC FLIGHT. Mention flight number and status.]
-Primary Concern: [Critical hazard for THIS SPECIFIC MISSION.]
-Recommended Action: [Practical pilot directive.]
-Decision Check: [Validation of PhaseGuard recommendation.]
-Directives JSON: [JSON array of 3-5 specific short directives e.g. ["Verify braking", "Monitor GPS"]]
+Requirements:
+1. Operational Briefing: 2-4 sentences explaining mission safety for THIS SPECIFIC FLIGHT. Mention flight number and status.
+2. Primary Concern: Critical hazard for THIS SPECIFIC MISSION.
+3. Recommended Action: Practical pilot directive.
+4. Directives: 3-5 specific short directives e.g. ["Verify braking", "Monitor GPS"]
+
+Return JSON ONLY:
+{
+  "briefingText": "string",
+  "primaryConcern": "string",
+  "recommendedAction": "string",
+  "directives": ["string"]
+}
 `;
+
+    console.log("[Groq Debug] Prompt preview (first 700 chars):", prompt.slice(0, 700));
 
     const response = await fetch(
       `https://api.groq.com/openai/v1/chat/completions`,
@@ -67,14 +77,15 @@ Directives JSON: [JSON array of 3-5 specific short directives e.g. ["Verify brak
           messages: [
             {
               role: "system",
-              content: "You are PhaseGuard AI, an aviation decision-support analysis assistant. Return accurate, concise, structured text with a final JSON component."
+              content: "You are PhaseGuard AI, an aviation safety analysis engine. Return accurate, concise, flight-specific structured JSON only."
             },
             {
               role: "user",
               content: prompt
             }
           ],
-          temperature: 0.3
+          temperature: 0.2,
+          response_format: { type: "json_object" }
         }),
         signal: controller.signal
       }
@@ -90,23 +101,15 @@ Directives JSON: [JSON array of 3-5 specific short directives e.g. ["Verify brak
     }
     
     const result = await response.json();
-    console.log("[Groq Debug] Response received");
-    const fullText = result.choices?.[0]?.message?.content || "";
-
-    let briefing = "Unable to generate briefing text.";
-    let directives = body.recommendations || body.aiRecommendations || [];
+    const content = result.choices?.[0]?.message?.content || "{}";
+    console.log("[Groq Debug] Groq response preview (first 700 chars):", content.slice(0, 700));
     
-    if (fullText.includes("Directives JSON:")) {
-      const parts = fullText.split("Directives JSON:");
-      briefing = parts[0].trim();
-      try {
-        directives = JSON.parse(parts[1].trim());
-      } catch (e) { console.error("JSON parse failed", e); }
-    } else {
-      briefing = fullText.trim();
-    }
-
-    return { briefing, directives };
+    const data = JSON.parse(content.trim());
+    
+    // Construct final briefing text from parts if needed
+    const finalBriefing = `${data.briefingText}\n\nPrimary Concern: ${data.primaryConcern}\n\nRecommended Action: ${data.recommendedAction}`;
+    
+    return { briefing: finalBriefing, directives: data.directives || [] };
   };
 
   try {
@@ -125,7 +128,7 @@ Directives JSON: [JSON array of 3-5 specific short directives e.g. ["Verify brak
     const fallback = generateFallbackBriefing(body);
     return NextResponse.json({
       success: true,
-      message: "Pilot briefing synchronized",
+      message: "Pilot briefing synchronized (local fallback)",
       briefing: fallback.briefing,
       directives: fallback.directives
     });
