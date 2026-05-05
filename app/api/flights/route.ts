@@ -61,12 +61,25 @@ export async function GET(request: Request) {
         scheduledTime: new Date(Date.now() - 7200000).toISOString(),
         estimatedTime: new Date(Date.now() - 3600000).toISOString(),
         aircraft: 'Boeing 777'
+      },
+      {
+        id: 'DEMO4',
+        flightNumber: 'PG404',
+        airline: 'Alpha Rescuer',
+        departureIata: 'SIN',
+        arrivalIata: icao.toUpperCase(),
+        departureAirport: 'Singapore Changi',
+        arrivalAirport: 'Destination',
+        status: 'diverted',
+        scheduledTime: new Date(Date.now() - 14400000).toISOString(),
+        estimatedTime: new Date(Date.now() + 3600000).toISOString(),
+        aircraft: 'Boeing 747-8'
       }
     ];
     return NextResponse.json({
       source: "DEMO_MODE",
       flights: demoFlights,
-      message: "Using meaningfully varied demo flights (Live API not connected)."
+      message: "Using meaningfully varied demo flights for high-stakes mission simulation."
     });
   }
 

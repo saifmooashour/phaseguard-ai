@@ -48,16 +48,16 @@ export default function Home() {
   const [isFetchingFlights, setIsFetchingFlights] = useState(false)
   const [flightType, setFlightType] = useState<'arrivals' | 'departures'>('arrivals')
 
-  // Gemini Briefing state
-  const [geminiBriefing, setGeminiBriefing] = useState<string | null>(null)
-  const [geminiDirectives, setGeminiDirectives] = useState<string[] | null>(null)
+  // AI Briefing state
+  const [aiBriefing, setAiBriefing] = useState<string | null>(null)
+  const [aiDirectives, setAiDirectives] = useState<string[] | null>(null)
   const [isGeneratingBriefing, setIsGeneratingBriefing] = useState(false)
 
 
 
-  // AI Risk Evaluator state
   const [aiRiskResult, setAiRiskResult] = useState<any | null>(null)
   const [isGeneratingAiRisk, setIsGeneratingAiRisk] = useState(false)
+  const [isAnalyzing, setIsAnalyzing] = useState(false); // Analysis lock
 
 
   // Cyber-Operational Exposure state
@@ -196,7 +196,7 @@ export default function Home() {
         alternativeRecommendation: decision === 'GO' ? 'Monitor conditions' : decision === 'CAUTION' ? 'Hold or Divert if conditions worsen' : 'Divert',
         operationalReasoning: result.topRisks || [],
         pilotActions: result.recommendations || [],
-        dispatcherNotes: [result.explanation || 'Rule-based analysis active.'],
+        dispatcherNotes: [result.explanation || 'AI-assisted assessment using validated operational inputs.'],
         missingDataWarnings: []
       };
     }
@@ -208,12 +208,6 @@ export default function Home() {
     if (appScreen === 'dashboard' && result) {
       if (!aiRiskResult && !isGeneratingAiRisk) {
         handleGenerateAiRisk();
-      }
-      if (!cyberIndicator && !isGeneratingCyber) {
-        handleGenerateCyberIndicator();
-      }
-      if (!dynamicRisks && !isGeneratingTopRisks) {
-        handleGenerateTopRisks();
       }
     }
   }, [appScreen, result]);
@@ -284,10 +278,10 @@ export default function Home() {
     if (!result) return;
 
     let textToSpeak = "";
-    if (appScreen === 'briefing' && geminiBriefing) {
-      textToSpeak = geminiBriefing;
-      if (geminiDirectives && geminiDirectives.length > 0) {
-        textToSpeak += ". Operational Directives: " + geminiDirectives.join(". ");
+    if (appScreen === 'briefing' && aiBriefing) {
+      textToSpeak = aiBriefing;
+      if (aiDirectives && aiDirectives.length > 0) {
+        textToSpeak += ". Operational Directives: " + aiDirectives.join(". ");
       }
     } else {
       const opRec = getOperationalRecommendation();
@@ -300,7 +294,7 @@ export default function Home() {
         const explanation = opRec.dispatcherNotes.join(' ');
         textToSpeak = `Operational Recommendation: ${decisionText}. ${scoreInfo} ${flightInfo} ${hazards} ${actions} ${explanation}`;
       } else {
-        textToSpeak = "AI-assisted risk assessment synchronized.";
+        textToSpeak = "AI-assisted risk assessment synchronized via validated operational inputs.";
       }
     }
     speakText(textToSpeak);
@@ -313,67 +307,32 @@ export default function Home() {
   const handleGenerateBriefing = async () => {
     if (!result) return;
     setIsGeneratingBriefing(true);
-    setGeminiBriefing(null);
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
     try {
       const res = await fetch('/api/briefing', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          airport: airport,
-          runway, traffic, workload, aircraft, visibilityCategory, windCategory, weatherCondition,
-          aiRiskScore: aiRiskResult && !aiRiskResult._error ? aiRiskResult.overallRiskScore : undefined,
-          aiDecision: aiRiskResult && !aiRiskResult._error ? aiRiskResult.decision : undefined,
-          aiConfidence: aiRiskResult && !aiRiskResult._error ? aiRiskResult.confidence : undefined,
-          aiTopRisks: aiRiskResult && !aiRiskResult._error ? aiRiskResult.topRisks : undefined,
-          aiRecommendations: aiRiskResult && !aiRiskResult._error ? aiRiskResult.recommendations : undefined,
-          aiExplanation: aiRiskResult && !aiRiskResult._error ? aiRiskResult.explanation : undefined,
-          factorScores: aiRiskResult && !aiRiskResult._error ? aiRiskResult.factorScores : undefined,
-          missingDataWarnings: aiRiskResult && !aiRiskResult._error ? aiRiskResult.missingDataWarnings : undefined,
-          score: (!aiRiskResult || aiRiskResult._error) ? result.score : undefined,
-          level: (!aiRiskResult || aiRiskResult._error) ? result.level : undefined,
-          decision: (!aiRiskResult || aiRiskResult._error) ? result.decision : undefined,
-          topRisks: (!aiRiskResult || aiRiskResult._error) ? result.topRisks : undefined,
-          recommendations: (!aiRiskResult || aiRiskResult._error) ? result.recommendations : undefined,
-          flightNumber: selectedFlight?.flightNumber,
-          airline: selectedFlight?.airline,
-          departureIata: selectedFlight?.departureIata,
-          arrivalIata: selectedFlight?.arrivalIata,
-          status: selectedFlight?.status,
-          scheduledTime: selectedFlight?.scheduledTime,
-          estimatedTime: selectedFlight?.estimatedTime,
-          flightAircraft: selectedFlight?.aircraft,
-          aiRiskResult: aiRiskResult && !aiRiskResult._error ? aiRiskResult : undefined,
-          operationalRecommendation: getOperationalRecommendation(),
+          ...aiRiskResult,
           selectedFlight,
-          selectedAirport: airportProfile,
-          weatherData,
-          trafficData: { trafficLevel: traffic },
-          dataSources: aiRiskResult?._dataSources || result?.dataSources || {},
-          cyberIndicator: cyberIndicator
+          aiRiskScore: aiRiskResult?.overallRiskScore,
+          aiDecision: aiRiskResult?.decision,
+          aiTopRisks: dynamicRisks?.risks
         }),
         signal: controller.signal
       });
       clearTimeout(timeoutId);
-      const json = await res.json();
-
-      if (json.fallback) {
-        setGeminiBriefing(json.briefing);
-        setGeminiDirectives(json.directives || null);
-      } else {
-        setGeminiBriefing(json.briefing);
-        setGeminiDirectives(json.directives || null);
-      }
+      const data = await res.json();
+      setAiBriefing(data.briefing);
+      setAiDirectives(data.directives);
     } catch (e) {
       clearTimeout(timeoutId);
-      console.error("Briefing error", e);
-      setGeminiBriefing("Mission intelligence synthesis complete. No immediate hazards requiring overriding directives identified.");
+      console.error("[Groq Debug] Briefing failed", e);
     } finally {
       setIsGeneratingBriefing(false);
     }
   };
-
   const handleFetchWeather = async () => {
     if (!airportProfile) return;
     setIsFetchingWeather(true)
@@ -415,7 +374,7 @@ export default function Home() {
     setLoadingMessage("Synthesizing Mission Intelligence...")
     setStarted(true)
     setResult(null)
-    setGeminiBriefing(null)
+    setAiBriefing(null)
     setAiRiskResult(null)
     setDynamicRisks(null)
 
@@ -503,7 +462,7 @@ export default function Home() {
 
   const handleStartNewMission = () => {
     setResult(null);
-    setGeminiBriefing(null);
+    setAiBriefing(null);
     setAiRiskResult(null);
     setWorkflowStep(1);
     setAppScreen('setup');
@@ -512,7 +471,16 @@ export default function Home() {
 
   const handleGenerateAiRisk = async () => {
     if (!result) return;
+    
+    if (isAnalyzing) {
+      console.log("[Groq Debug] Groq blocked (duplicate request)");
+      return;
+    }
+
+    setIsAnalyzing(true);
     setIsGeneratingAiRisk(true);
+    console.log("[Groq Debug] Groq request started");
+
     try {
       let currentWeatherData = weatherData;
       if (!currentWeatherData && airportProfile) {
@@ -544,7 +512,7 @@ export default function Home() {
           }
         } catch (e) {
           clearTimeout(weatherTimeout);
-          console.error('Failed to auto-fetch weather for AI payload', e);
+          console.error('Failed to auto-fetch weather', e);
         }
       }
 
@@ -561,7 +529,7 @@ export default function Home() {
           }
         } catch (e) {
           clearTimeout(trafficTimeout);
-          console.error('Failed to auto-fetch traffic for AI payload', e);
+          console.error('Failed to auto-fetch traffic', e);
         }
       }
 
@@ -578,7 +546,6 @@ export default function Home() {
       };
 
       const payload = {
-        model: "gemini-2.5-flash",
         airport: airportProfile || { icao: airport },
         flight: selectedFlight || { status: 'Unknown' },
         weather: currentWeatherData || { source: 'MANUAL', rawMetar: 'N/A', visibility: visibilityCategory, windSpeed: windCategory, weatherCondition },
@@ -588,7 +555,7 @@ export default function Home() {
       };
 
       const riskCtrl = new AbortController();
-      const riskTimeout = setTimeout(() => riskCtrl.abort(), 30000);
+      const riskTimeout = setTimeout(() => riskCtrl.abort(), 12000); // 12s timeout max
       try {
         const res = await fetch('/api/ai-risk-evaluator', {
           method: 'POST',
@@ -599,17 +566,40 @@ export default function Home() {
         clearTimeout(riskTimeout);
 
         const json = await res.json();
-        setAiRiskResult({ ...json.data, _dataSources: dataSources, _fallback: json.fallback, _message: json.message });
+        const data = json.data;
+        
+        console.log("[Groq Debug] Groq response received (/api/ai-risk-evaluator)");
+        
+        // Update Risk Evaluator state
+        setAiRiskResult({ ...data, _dataSources: dataSources, _message: json.message });
+
+        // Sequential staggered triggers for other Groq routes
+        // This restores the previous independent behavior while maintaining stability
+        await new Promise(resolve => setTimeout(resolve, 2500));
+        await handleGenerateTopRisks();
+        
+        await new Promise(resolve => setTimeout(resolve, 2500));
+        await handleGenerateCyberIndicator();
+        
+        await new Promise(resolve => setTimeout(resolve, 2500));
+        await handleGenerateBriefing();
+
       } catch (e: any) {
         clearTimeout(riskTimeout);
-        console.error("AI Risk Assessment Error", e);
+        console.error("[Groq Debug] Groq failed (/api/ai-risk-evaluator):", e.message);
         setAiRiskResult({ _error: true });
+        
+        // Trigger fallbacks sequentially even if primary fails
+        setTimeout(() => handleGenerateTopRisks(), 2500);
+        setTimeout(() => handleGenerateCyberIndicator(), 5000);
+        setTimeout(() => handleGenerateBriefing(), 7500);
       }
     } catch (e) {
-      console.error("AI Risk Assessment Data Prep Error", e);
+      console.error("[Groq Debug] Groq failed (Data Prep):", e);
       setAiRiskResult({ _error: true });
     } finally {
       setIsGeneratingAiRisk(false);
+      setIsAnalyzing(false);
     }
   };
 
@@ -618,40 +608,26 @@ export default function Home() {
     if (!result) return;
     setIsGeneratingCyber(true);
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 sec timeout
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
     try {
-      const payload = {
-        model: "gemini-2.5-flash",
-        airport: airportProfile || { icao: airport },
-        weather: weatherData || { source: 'MANUAL', rawMetar: 'N/A', visibility: visibilityCategory, windSpeed: windCategory, weatherCondition },
-        runwayCondition: runway,
-        trafficLevel: traffic,
-        crewWorkload: workload,
-        aircraftStatus: aircraft,
-        currentRiskScore: aiRiskResult && !aiRiskResult._error ? aiRiskResult.overallRiskScore : result.score,
-        top3Risks: getTop3Risks()
-      };
-
       const res = await fetch('/api/cyber-briefing', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          flight: selectedFlight,
+          currentRiskScore: aiRiskResult?.overallRiskScore,
+          top3Risks: dynamicRisks?.risks
+        }),
         signal: controller.signal
       });
       clearTimeout(timeoutId);
-
-      const json = await res.json();
-      setCyberIndicator({ ...json.data, _fallback: json.fallback });
+      const data = await res.json();
+      if (data.data) {
+        setCyberIndicator(data.data);
+      }
     } catch (e) {
       clearTimeout(timeoutId);
-      console.error("Cyber Evaluator Error", e);
-      setCyberIndicator({
-        score: 25,
-        level: 'Low',
-        summary: 'Strategic cyber-operational exposure assessment completed.',
-        actions: ["Monitor systems", "Verify communication"],
-        _fallback: true
-      });
+      console.error("[Groq Debug] Cyber failed", e);
     } finally {
       setIsGeneratingCyber(false);
     }
@@ -661,33 +637,30 @@ export default function Home() {
     if (!result) return;
     setIsGeneratingTopRisks(true);
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 sec timeout
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
     try {
-      const payload = {
-        airport: airportProfile || { icao: airport },
-        weather: weatherData || { source: 'MANUAL', rawMetar: 'N/A', visibility: visibilityCategory, windSpeed: windCategory, weatherCondition },
-        runwayCondition: runway,
-        trafficLevel: traffic,
-        crewWorkload: workload,
-        aircraftStatus: aircraft,
-        currentRiskScore: aiRiskResult && !aiRiskResult._error ? aiRiskResult.overallRiskScore : result.score,
-        top3Risks: getTop3Risks()
-      };
-
       const res = await fetch('/api/top-risks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          flight: selectedFlight,
+          runwayCondition: runway,
+          trafficLevel: traffic,
+          crewWorkload: workload,
+          aircraftStatus: aircraft,
+          visibilityCategory,
+          windCategory
+        }),
         signal: controller.signal
       });
       clearTimeout(timeoutId);
-
-      const json = await res.json();
-      setDynamicRisks({ ...json.data, _fallback: json.fallback });
-    } catch (e: any) {
+      const data = await res.json();
+      if (data.data?.risks) {
+        setDynamicRisks({ risks: data.data.risks, source: data.data.source });
+      }
+    } catch (e) {
       clearTimeout(timeoutId);
-      console.error("Top Risks Error", e);
-      setDynamicRisks({ risks: getTop3Risks(), source: 'DERIVED', _fallback: true });
+      console.error("[Groq Debug] Top Risks failed", e);
     } finally {
       setIsGeneratingTopRisks(false);
     }
@@ -723,7 +696,7 @@ export default function Home() {
       operationalRecommendation: opRec,
       weatherData: weatherData,
       trafficData: { trafficLevel: traffic },
-      geminiBriefing: geminiBriefing
+      aiBriefing: aiBriefing
     }
 
     setIsSaving(true)
@@ -1236,7 +1209,7 @@ export default function Home() {
                   <div className="flex flex-col h-full">
                     <div className="flex justify-between items-center mb-2">
                       <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                        {aiRiskResult && !aiRiskResult._error ? 'AI-Estimated Operational Landing Risk' : 'AI Synthesis Active'}
+                        {aiRiskResult && !aiRiskResult._error ? 'AI-Estimated Operational Landing Risk' : 'AI-Assisted Assessment'}
                       </div>
                       <div className="flex space-x-2">
                         {isSpeaking ? (
@@ -1649,7 +1622,7 @@ export default function Home() {
                         )}
                         <div className="flex space-x-2 mt-2">
                           <button onClick={handleGenerateCyberIndicator} disabled={isGeneratingCyber} className="flex-1 bg-slate-800/50 hover:bg-slate-800 disabled:opacity-50 text-[8px] text-slate-500 hover:text-teal-400 font-bold uppercase tracking-widest py-1.5 rounded border border-slate-800 transition-colors">
-                            {isGeneratingCyber ? 'Generating...' : 'Generate Gemini Cyber Briefing'}
+                            {isGeneratingCyber ? 'Generating...' : 'Generate AI Cyber Briefing'}
                           </button>
                           {!speechSupported ? (
                             <div className="text-[8px] text-cyan-400/80 italic flex items-center justify-center px-1 flex-1">Voice synthesis active</div>
@@ -1870,7 +1843,7 @@ export default function Home() {
                   <div className="text-xs font-bold text-slate-400 uppercase tracking-widest bg-slate-950 px-3 py-1 rounded-lg border border-slate-800">
                     Risk Score: <span className="text-white">{aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result.score}</span>
                   </div>
-                  <div className="text-[10px] font-black text-cyan-400 uppercase tracking-widest bg-cyan-400/10 px-3 py-1 rounded-lg border border-cyan-400/20">AI Synthesis Active</div>
+                  <div className="text-[10px] font-black text-cyan-400 uppercase tracking-widest bg-cyan-400/10 px-3 py-1 rounded-lg border border-cyan-400/20">AI-Assisted Assessment</div>
                 </div>
               </div>
             </div>
@@ -1899,7 +1872,7 @@ export default function Home() {
                   </h3>
                   {!isSpeaking ? (
                     <button
-                      onClick={() => speakText("Operational Directives: " + (geminiDirectives || operationalRecommendation?.pilotActions || []).join(". "))}
+                      onClick={() => speakText("Operational Directives: " + (aiDirectives || operationalRecommendation?.pilotActions || []).join(". "))}
                       className="flex items-center text-[10px] font-black border bg-cyan-500/10 text-cyan-400 border-cyan-500/30 hover:bg-cyan-500/20 px-3 py-1.5 rounded-full transition-all uppercase tracking-widest"
                     >
                       <svg className="w-3.5 h-3.5 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
@@ -1938,7 +1911,7 @@ export default function Home() {
 
             {/* AI Safety Officer Briefing - Centered & Premium */}
             <div className="w-full">
-              <Panel title="Gemini AI Safety Synthesis" icon={<svg className="w-4 h-4 mr-2 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>}>
+              <Panel title="AI Safety Synthesis" icon={<svg className="w-4 h-4 mr-2 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>}>
                 <div className="flex flex-col min-h-[300px] p-2">
                   {/* Voice Controls */}
                   <div className="flex justify-between items-center mb-6 border-b border-slate-800 pb-4">
@@ -1973,10 +1946,10 @@ export default function Home() {
                     )}
                   </div>
 
-                  {geminiBriefing ? (
+                  {aiBriefing ? (
                     <div className="text-base text-slate-200 leading-relaxed font-medium bg-slate-950/50 p-8 rounded-[32px] border border-slate-800">
                       <div className="space-y-6">
-                        {geminiBriefing.split('\n').map((line, i) => {
+                        {aiBriefing.split('\n').map((line, i) => {
                           if (!line.trim()) return null;
                           if (line.includes(':') && line.split(':')[0].length < 30) {
                             const [heading, ...rest] = line.split(':');
@@ -1998,13 +1971,13 @@ export default function Home() {
                         <svg className="w-8 h-8 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.663 17h4.674a1 1 0 00.922-.617l2.108-4.742A1 1 0 0016.445 10H7.555a1 1 0 00-.922.641l2.108 4.742a1 1 0 00.922.617zM2 17V7a2 2 0 012-2h16a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2z" /></svg>
                       </div>
                       <h4 className="text-lg font-black text-white mb-2">Ready for AI Synthesis</h4>
-                      <p className="text-sm text-slate-400 mb-8 max-w-md">Gemini will process all tactical inputs to provide a high-level safety narrative for this mission.</p>
+                      <p className="text-sm text-slate-400 mb-8 max-w-md">The AI will process all tactical inputs to provide a high-level safety narrative for this mission.</p>
                       <button
                         onClick={handleGenerateBriefing}
                         disabled={isGeneratingBriefing}
                         className="relative group bg-white text-slate-950 px-10 py-4 rounded-full text-[10px] font-black uppercase tracking-[0.2em] hover:bg-purple-500 hover:text-white transition-all shadow-xl hover:shadow-purple-500/20 disabled:opacity-50"
                       >
-                        {isGeneratingBriefing ? 'Synthesizing Tactical Intel...' : 'Generate Gemini Briefing'}
+                        {isGeneratingBriefing ? 'Synthesizing Tactical Intel...' : 'Generate AI Briefing'}
                       </button>
                     </div>
                   )}

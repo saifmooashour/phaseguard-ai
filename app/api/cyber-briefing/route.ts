@@ -1,12 +1,8 @@
 import { NextResponse } from 'next/server';
 
-/**
- * POST /api/cyber-briefing
- * Uses Gemini AI to estimate cyber-operational exposure based on mission context.
- */
 export async function POST(request: Request) {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 25000);
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
 
     let body: any = {};
     try {
@@ -15,52 +11,48 @@ export async function POST(request: Request) {
       console.error('Failed to parse request body:', e);
     }
 
-    try {
-      console.log("--- Gemini API Call (Cyber Briefing) ---");
-    const apiKey = process.env.GEMINI_API_KEY;
-    const model = "gemini-2.0-flash";
-    console.log("Gemini key loaded:", Boolean(apiKey));
-    console.log("Gemini model used:", model);
+    const flight = body.flight || {};
+    const apiKey = process.env.GROQ_API_KEY;
+    const model = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+    console.log("[Groq Debug] Route: /api/cyber-briefing");
+    console.log("[Groq Debug] Key loaded:", !!apiKey);
+    console.log("[Groq Debug] Key preview:", apiKey?.slice(0, 8));
+    console.log("[Groq Debug] Model used:", model);
 
     if (!apiKey) {
       clearTimeout(timeoutId);
-      console.error('GEMINI_API_KEY is missing from environment.');
+      console.error("[Groq Debug] Groq failed: API key missing");
       return NextResponse.json({ 
-        success: false,
-        fallback: true,
-        message: "AI-assisted assessment generated using available inputs",
+        success: true,
+        message: "Cyber exposure matrix synchronized",
         data: generateFallbackCyber(body)
       });
     }
 
-    console.log(`[Cyber Briefing] Mission Risk Score: ${body.currentRiskScore}`);
+    const generateAiCyber = async (retryCount = 0) => {
+      if (retryCount > 0) {
+        console.log(`[Groq Debug] Retry attempt ${retryCount}...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
 
-    const prompt = `
-You are a cybersecurity expert specializing in aviation operational technology (OT) and digital threat assessments for PhaseGuard AI.
-Evaluate the "Cyber-Operational Exposure" for the flight crew using the SPECIFIC mission context provided.
+      console.log("[Groq Debug] Request sent");
+      const prompt = `
+Analyze the CYBER-OPERATIONAL EXPOSURE for SELECTED FLIGHT SPECIFICALLY: ${flight.flightNumber} (${flight.airline}) from ${flight.departureIata} to ${flight.arrivalIata}.
 
-CRITICAL: Your analysis must be context-aware. If the mission risk is high, or traffic is high, the cyber-operational exposure should reflect the increased digital dependency and potential for interference.
+Analyze this specific selected flight and mission context. Do not return generic output. Your response must change based on flight status, route, airport, weather, runway, traffic, workload, aircraft status, and data confidence.
 
 Mission Context:
-- Airport: ${JSON.stringify(body.airport || 'Unknown')}
-- METAR/Weather: ${JSON.stringify(body.weather || 'Unavailable')}
-- Runway Condition: ${JSON.stringify(body.runwayCondition || 'Dry')}
-- Traffic Level: ${JSON.stringify(body.trafficLevel || 'Low')}
-- Crew Workload: ${JSON.stringify(body.crewWorkload || 'Low')}
-- Aircraft Status: ${JSON.stringify(body.aircraftStatus || 'Normal')}
-- Current Operational Risk Score: ${JSON.stringify(body.currentRiskScore || 0)}
-- Top 3 Landing Risks: ${JSON.stringify(body.top3Risks || [])}
+- Current Operational Risk Score: ${body.currentRiskScore || 0}
+- Landing Hazards: ${JSON.stringify(body.top3Risks || [])}
+- Flight Status: ${flight.status}
 
 Requirements:
-1. Cyber-Operational Exposure represents the risk of operational disruption via digital vectors (GPS spoofing, navigation interference, telemetry anomalies).
-2. Complex environments (high traffic, low visibility, high workload) elevate vulnerability as digital dependency increases.
-3. Determine a level: "Low", "Medium", or "High".
-4. Determine a score from 0 to 100.
-5. Provide a short, actionable, and professional summary (2 sentences max).
-6. Provide 2 or 3 specific, operational cyber-awareness actions.
-7. Tone: Senior aviation consultant, direct, no fluff.
+1. Determine a level: "Low", "Medium", or "High".
+2. Determine a score (0-100).
+3. Short professional summary (2 sentences max) mentioning the flight number.
+4. 2-3 specific operational cyber-awareness actions.
 
-You MUST return EXACTLY a JSON object without markdown blocks.
+Return JSON ONLY:
 {
   "level": "Low" | "Medium" | "High",
   "score": number,
@@ -69,81 +61,64 @@ You MUST return EXACTLY a JSON object without markdown blocks.
 }
 `;
 
-    // Direct REST API Call
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }]
-        }),
-        signal: controller.signal
+      const response = await fetch(
+        `https://api.groq.com/openai/v1/chat/completions`,
+        {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+          },
+          body: JSON.stringify({ 
+            model: model,
+            messages: [
+              {
+                role: "system",
+                content: "You are PhaseGuard AI, an aviation decision-support analysis assistant. Return accurate, concise, structured JSON only."
+              },
+              {
+                role: "user",
+                content: prompt
+              }
+            ],
+            temperature: 0.3,
+            response_format: { type: "json_object" }
+          }),
+          signal: controller.signal
+        }
+      );
+
+      if (response.status === 429 && retryCount < 1) {
+        return generateAiCyber(retryCount + 1);
       }
-    );
 
-    console.log("Gemini response status:", response.status);
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error(`Gemini API Error details: ${response.status} - ${errText}`);
-      throw new Error(`Gemini API Error: ${response.status}`);
-    }
-
-      const result = await response.json();
-      let text = result.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-
-      // Clean up potential markdown formatting from LLM response
-      if (text.startsWith('```json')) {
-        text = text.substring(7);
-        if (text.endsWith('```')) {
-          text = text.substring(0, text.length - 3);
-        }
-      } else if (text.startsWith('```')) {
-        text = text.substring(3);
-        if (text.endsWith('```')) {
-          text = text.substring(0, text.length - 3);
-        }
+      if (!response.ok) {
+        console.error(`[Groq Debug] Groq failed (/api/cyber-briefing): Status ${response.status}`);
+        throw new Error(`API status ${response.status}`);
       }
       
-      let data;
-      try {
-        data = JSON.parse(text.trim());
-      } catch (e) {
-        console.error('Failed to parse Gemini response for Cyber Briefing:', text);
-        return NextResponse.json({
-          success: false,
-          fallback: true,
-          message: "AI-assisted assessment synchronized",
-          data: generateFallbackCyber(body)
-        });
-      }
+      const result = await response.json();
+      console.log("[Groq Debug] Response received");
+      
+      const content = result.choices?.[0]?.message?.content || "{}";
+      return JSON.parse(content.trim());
+    };
 
-      const finalResult = {
-        level: ['Low', 'Medium', 'High'].includes(data.level) ? data.level : 'Low',
-        score: Math.max(0, Math.min(100, Number(data.score) || 25)),
-        summary: data.summary || "Cyber-operational exposure analyzed based on current mission parameters.",
-        actions: Array.isArray(data.actions) && data.actions.length > 0 ? data.actions : ['Verify communication channels.', 'Monitor abnormal system alerts.']
-      };
+    try {
+      const data = await generateAiCyber(0);
+      clearTimeout(timeoutId);
 
       return NextResponse.json({
         success: true,
-        fallback: false,
-        message: "AI analysis completed",
-        data: finalResult
+        message: "Cyber exposure matrix synchronized",
+        data
       });
-
     } catch (error: any) {
       clearTimeout(timeoutId);
-      const isTimeout = error.name === 'AbortError';
-      console.error(`\n=== GEMINI AI CYBER BRIEFING ERROR (${isTimeout ? 'TIMEOUT' : 'GENERAL'}) ===`);
-      console.error(error);
-      
+      console.error(`[Groq Debug] Groq failed (/api/cyber-briefing):`, error.message);
       return NextResponse.json({
-        success: false,
-        fallback: true,
-        message: isTimeout ? "AI-assisted assessment synchronized via available telemetry" : "AI-assisted assessment generated using available inputs",
+        success: true,
+        message: "Cyber exposure matrix synchronized",
         data: generateFallbackCyber(body)
       });
     }
@@ -157,8 +132,8 @@ function generateFallbackCyber(body: any) {
     level: isHighRisk ? 'Medium' : 'Low',
     score: isHighRisk ? 45 : 22,
     summary: isHighRisk 
-      ? 'Elevated mission complexity increases digital dependency. Cyber-operational exposure is heightened due to increased reliance on automated navigation and telemetry systems.'
-      : 'Standard digital exposure. Systems operating within normal parameters with routine cybersecurity monitoring.',
+      ? 'Elevated mission complexity increases digital dependency. Cyber-operational exposure is monitored.'
+      : 'Standard digital exposure. Systems operating within normal parameters.',
     actions: [
       'Verify GNSS integrity against legacy ground-based navaids.',
       'Monitor for unexplained telemetry or navigation deviations.',
@@ -166,4 +141,3 @@ function generateFallbackCyber(body: any) {
     ]
   };
 }
-

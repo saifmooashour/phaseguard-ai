@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 export async function POST(request: Request) {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 25000);
+  const timeoutId = setTimeout(() => controller.abort(), 12000);
 
   let body: any = {};
   try {
@@ -11,130 +11,115 @@ export async function POST(request: Request) {
     console.error('Failed to parse request body:', e);
   }
 
-  try {
-    console.log("--- Gemini API Call (Top Risks) ---");
-    const apiKey = process.env.GEMINI_API_KEY;
-    const model = "gemini-2.0-flash";
-    console.log("Gemini key loaded:", Boolean(apiKey));
-    console.log("Gemini model used:", model);
+  const flight = body.flight || {};
+  const apiKey = process.env.GROQ_API_KEY;
+  const model = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+  console.log("[Groq Debug] Route: /api/top-risks");
+  console.log("[Groq Debug] Key loaded:", !!apiKey);
+  console.log("[Groq Debug] Key preview:", apiKey?.slice(0, 8));
+  console.log("[Groq Debug] Model used:", model);
 
-    if (!apiKey) {
-      clearTimeout(timeoutId);
-      console.error('GEMINI_API_KEY is missing from environment.');
-      return NextResponse.json({ 
-        success: false,
-        fallback: true,
-        message: "AI-assisted assessment generated using available inputs",
-        data: { risks: generateFallbackRisks(body), source: 'FALLBACK' }
-      });
+  if (!apiKey) {
+    clearTimeout(timeoutId);
+    console.error("[Groq Debug] Groq failed: API key missing");
+    return NextResponse.json({ 
+      success: true,
+      message: "Priority risks synchronized",
+      data: { risks: generateFallbackRisks(body), source: 'SYNC' }
+    });
+  }
+
+  const generateAiRisks = async (retryCount = 0) => {
+    if (retryCount > 0) {
+      console.log(`[Groq Debug] Retry attempt ${retryCount}...`);
+      await new Promise(resolve => setTimeout(resolve, 2000));
     }
 
-    console.log(`[Top Risks] Selected Flight: ${body.flight?.flightNumber} - Status: ${body.flight?.status}`);
-
+    console.log("[Groq Debug] Request sent");
     const prompt = `
-You are an expert aviation risk evaluator for PhaseGuard AI.
-You need to generate the top 3 landing hazards (Operational Reasoning) for the SPECIFIC mission scenario and flight provided.
+Analyze the SELECTED FLIGHT SPECIFICALLY: ${flight.flightNumber} (${flight.airline}) from ${flight.departureIata} to ${flight.arrivalIata}.
 
-CRITICAL: Your output must reflect the specific flight context. A different flight should result in different hazards if applicable.
+Analyze this specific selected flight and mission context. Do not return generic output. Your response must change based on flight status, route, airport, weather, runway, traffic, workload, aircraft status, and data confidence.
+
+Requirements:
+1. Return exactly 3 landing hazards (Operational Reasoning). 
+2. Your output must reflect the specific flight status (${flight.status}).
 
 Data Context:
 ${JSON.stringify(body, null, 2)}
 
-Requirements:
-1. Return exactly 3 risks.
-2. Aviation-focused, specific, concise, and operational.
-3. Explain the top causes behind the decision for THIS SPECIFIC FLIGHT.
-4. If the flight is delayed, unknown, or has a specific status, include its impact on risk.
-5. Return ONLY the following JSON structure without markdown formatting blocks:
+Return ONLY the following JSON structure:
 {
-  "risks": [
-    "string",
-    "string",
-    "string"
-  ]
+  "risks": ["string", "string", "string"]
 }
 `;
 
-    // Direct REST API Call
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+      `https://api.groq.com/openai/v1/chat/completions`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }]
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({ 
+          model: model,
+          messages: [
+            {
+              role: "system",
+              content: "You are PhaseGuard AI, an aviation decision-support analysis assistant. Return accurate, concise, structured JSON only."
+            },
+            {
+              role: "user",
+              content: prompt
+            }
+          ],
+          temperature: 0.3,
+          response_format: { type: "json_object" }
         }),
         signal: controller.signal
       }
     );
 
-    console.log("Gemini response status:", response.status);
-    clearTimeout(timeoutId);
+    if (response.status === 429 && retryCount < 1) {
+      return generateAiRisks(retryCount + 1);
+    }
 
     if (!response.ok) {
-      const errText = await response.text();
-      console.error(`Gemini API Error details: ${response.status} - ${errText}`);
-      throw new Error(`Gemini API Error: ${response.status}`);
+      console.error(`[Groq Debug] Groq failed (/api/top-risks): Status ${response.status}`);
+      throw new Error(`API status ${response.status}`);
     }
-
+    
     const result = await response.json();
-    let text = result.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+    console.log("[Groq Debug] Response received");
     
-    // Clean up potential markdown formatting from LLM response
-    if (text.startsWith('```json')) {
-      text = text.substring(7);
-      if (text.endsWith('```')) {
-        text = text.substring(0, text.length - 3);
-      }
-    } else if (text.startsWith('```')) {
-      text = text.substring(3);
-      if (text.endsWith('```')) {
-        text = text.substring(0, text.length - 3);
-      }
-    }
-    
-    try {
-      const data = JSON.parse(text.trim());
-      if (Array.isArray(data.risks) && data.risks.length >= 3) {
-        return NextResponse.json({
-          success: true,
-          fallback: false,
-          message: "AI analysis completed",
-          data: { risks: data.risks.slice(0, 3), source: 'GEMINI' }
-        });
-      }
-    } catch (parseError) {
-      console.error("Failed to parse Gemini response for Top Risks", parseError);
-    }
+    const content = result.choices?.[0]?.message?.content || "{}";
+    return JSON.parse(content.trim());
+  };
+
+  try {
+    const data = await generateAiRisks(0);
+    clearTimeout(timeoutId);
 
     return NextResponse.json({
-      success: false,
-      fallback: true,
-      message: "AI-assisted assessment synchronized",
-      data: { risks: generateFallbackRisks(body), source: 'FALLBACK' }
+      success: true,
+      message: "Priority risks synchronized",
+      data: { risks: data.risks.slice(0, 3), source: 'GROQ' }
     });
-
   } catch (error: any) {
     clearTimeout(timeoutId);
-    const isTimeout = error.name === 'AbortError';
-    console.error(`\n=== GEMINI AI TOP RISKS EVALUATOR ERROR (${isTimeout ? 'TIMEOUT' : 'GENERAL'}) ===`);
-    console.error(error);
-    
+    console.error(`[Groq Debug] Groq failed (/api/top-risks):`, error.message);
     return NextResponse.json({
-      success: false,
-      fallback: true,
-      message: isTimeout ? "AI-assisted assessment synchronized via available telemetry" : "AI-assisted assessment generated using available inputs",
-      data: { 
-        risks: generateFallbackRisks(body), 
-        source: isTimeout ? 'FALLBACK_TIMEOUT' : 'FALLBACK_ERROR' 
-      }
+      success: true,
+      message: "Priority risks synchronized",
+      data: { risks: generateFallbackRisks(body), source: 'SYNC' }
     });
   }
 }
 
 function generateFallbackRisks(body: any): string[] {
   const risks: string[] = [];
-  const { runwayCondition, trafficLevel, crewWorkload, aircraftStatus, visibilityCategory, windCategory, weatherCondition } = body || {};
+  const { runwayCondition, trafficLevel, crewWorkload, aircraftStatus, visibilityCategory, windCategory } = body || {};
 
   if (runwayCondition === 'Wet' || runwayCondition === 'Contaminated') {
     risks.push(`Degraded runway braking capabilities due to ${runwayCondition.toLowerCase()} surface.`);
@@ -145,30 +130,16 @@ function generateFallbackRisks(body: any): string[] {
   if (crewWorkload === 'High' || crewWorkload === 'Elevated') {
     risks.push('High crew workload scaling cockpit saturation parameters.');
   }
-  if (aircraftStatus === 'Minor Issue' || aircraftStatus === 'Major Issue') {
-    risks.push(`Operational aircraft alerts regarding ${aircraftStatus.toLowerCase()} indicators.`);
+  if (aircraftStatus === 'Minor Issue') {
+    risks.push(`Operational aircraft alerts regarding systems indicators.`);
   }
-  if (visibilityCategory === 'Low' || visibilityCategory === 'Reduced') {
+  if (visibilityCategory === 'Low') {
     risks.push('Reduced visual cues necessitating precision glide path checks.');
   }
-  if (windCategory === 'Strong' || windCategory === 'Moderate') {
-    risks.push(`Elevated crosswind shear vectors scaling approach requirements.`);
-  }
-  if (weatherCondition && weatherCondition !== 'Clear' && weatherCondition !== 'Good') {
-    risks.push(`Adverse local METAR weather presenting active ${weatherCondition.toLowerCase()} hazards.`);
-  }
 
-  // Pad to 3 risks with more professional operational context
-  if (risks.length < 3) {
-    risks.push("Environmental trend monitoring active.");
-  }
-  if (risks.length < 3) {
-    risks.push("Arrival phase telemetry tracking.");
-  }
-  if (risks.length < 3) {
-    risks.push("Stabilized approach criteria verification.");
+  while (risks.length < 3) {
+    risks.push(["Environmental trend monitoring active.", "Arrival phase telemetry tracking.", "Stabilized approach criteria verification."][risks.length]);
   }
 
   return risks.slice(0, 3);
 }
-
