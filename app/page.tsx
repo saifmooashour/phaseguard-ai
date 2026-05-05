@@ -333,6 +333,16 @@ export default function Home() {
       setIsGeneratingBriefing(false);
     }
   };
+  const handleSelectFlight = (f: any) => {
+    setSelectedFlight(f);
+    setResult(null);
+    setAiRiskResult(null);
+    setAiBriefing(null);
+    setDynamicRisks(null);
+    setCyberIndicator(null);
+    setAiDirectives(null);
+  };
+
   const handleFetchWeather = async () => {
     if (!airportProfile) return;
     setIsFetchingWeather(true)
@@ -370,6 +380,7 @@ export default function Home() {
   };
 
   const runAnalysisWithParams = async (params: any) => {
+    console.log("ANALYZE PAYLOAD", selectedFlight, params);
     setIsAppLoading(true)
     setLoadingMessage("Synthesizing Mission Intelligence...")
     setStarted(true)
@@ -1120,7 +1131,7 @@ export default function Home() {
                     ) : flightsState?.source === 'LIVE' ? (
                       <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
                         {flightsState.flights.map((f: any, i: number) => (
-                          <div key={i} onClick={() => setSelectedFlight(f)} className={`p-3 rounded-lg border cursor-pointer transition-colors flex justify-between items-center ${selectedFlight === f ? 'bg-teal-900/30 border-teal-500' : 'bg-slate-950/50 border-slate-800 hover:border-slate-600'}`}>
+                          <div key={i} onClick={() => handleSelectFlight(f)} className={`p-3 rounded-lg border cursor-pointer transition-colors flex justify-between items-center ${selectedFlight === f ? 'bg-teal-900/30 border-teal-500' : 'bg-slate-950/50 border-slate-800 hover:border-slate-600'}`}>
                             <div>
                               <div className="text-xs font-bold text-white">{f.flightNumber} <span className="text-[10px] text-slate-500 font-normal">{f.airline}</span></div>
                               <div className="text-[10px] text-slate-400">{f.departureIata} &rarr; {f.arrivalIata}</div>
