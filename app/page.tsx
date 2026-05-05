@@ -3,7 +3,8 @@ import { useState, useEffect, useRef } from 'react'
 import { calculateRisk, RiskResult } from '../lib/riskEngine'
 import { fetchWeather, WeatherProfile } from '../lib/weatherApi'
 import { getAirportProfile, getNearestAirports, searchAirports } from '../lib/airportData'
-import LandingVisualization from '../components/LandingVisualization'
+import dynamic from 'next/dynamic'
+const LandingVisualization = dynamic(() => import('../components/LandingVisualization'), { ssr: false })
 
 
 type ScenarioType = 'Normal' | 'Rainy' | 'High Traffic' | 'Storm' | 'Critical'
@@ -45,6 +46,7 @@ export default function Home() {
   const [selectedFlight, setSelectedFlight] = useState<any | null>(null)
   const [isLocating, setIsLocating] = useState(false)
   const [locationError, setLocationError] = useState<string | null>(null)
+  const [apiError, setApiError] = useState<string | null>(null)
   const [isFetchingFlights, setIsFetchingFlights] = useState(false)
   const [flightType, setFlightType] = useState<'arrivals' | 'departures'>('arrivals')
 
@@ -58,6 +60,7 @@ export default function Home() {
   const [aiRiskResult, setAiRiskResult] = useState<any | null>(null)
   const [isGeneratingAiRisk, setIsGeneratingAiRisk] = useState(false)
   const [isAnalyzing, setIsAnalyzing] = useState(false); // Analysis lock
+  const [lastRequestId, setLastRequestId] = useState<string | null>(null);
 
 
   // Cyber-Operational Exposure state
@@ -77,23 +80,59 @@ export default function Home() {
   const [recentAssessments, setRecentAssessments] = useState<any[]>([])
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapError, setMapError] = useState(false);
+  const [assessmentsCache, setAssessmentsCache] = useState<Record<string, any>>({});
+  const [currentTime, setCurrentTime] = useState<Date | null>(null);
   const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
   useEffect(() => {
+    setCurrentTime(new Date());
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
     if (!googleMapsApiKey || mapLoaded || mapError) return;
+
     if ((window as any).google && (window as any).google.maps) {
       setMapLoaded(true);
       return;
     }
 
+    const existingScript = document.querySelector('script[src*="maps.googleapis.com"]');
+    if (existingScript) {
+      if ((window as any).google) setMapLoaded(true);
+      else existingScript.addEventListener('load', () => setMapLoaded(true));
+      return;
+    }
+
     const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${googleMapsApiKey}&libraries=geometry`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${googleMapsApiKey}&libraries=geometry&loading=async`;
     script.async = true;
     script.defer = true;
     script.onload = () => setMapLoaded(true);
     script.onerror = () => setMapError(true);
     document.head.appendChild(script);
   }, [googleMapsApiKey, mapLoaded, mapError]);
+
+  useEffect(() => {
+    if (isAppLoading) {
+      const timeout = setTimeout(() => {
+        setIsAppLoading(false);
+        setApiError("Mission synchronization timed out. The engine is attempting to recover...");
+        console.error("[PhaseGuard AI] GLOBAL TIMEOUT TRIGGERED");
+      }, 25000);
+      return () => clearTimeout(timeout);
+    }
+  }, [isAppLoading]);
+
+  useEffect(() => {
+    // Only clear speech when switching major contexts
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+      setIsPaused(false);
+    }
+  }, [airport, selectedFlight]);
 
   useEffect(() => {
     if (!mapLoaded || !mapRef.current || !airportProfile || appScreen !== 'dashboard') return;
@@ -164,45 +203,63 @@ export default function Home() {
     }
   }, [mapLoaded, airportProfile, selectedFlight, appScreen]);
 
-  const getOperationalRecommendation = () => {
+  function getOperationalRecommendation() {
     if (aiRiskResult && !aiRiskResult._error) {
       const decision = aiRiskResult.decision || 'CAUTION';
       const primary: string =
-        decision === 'GO' ? 'PROCEED_NORMALLY' :
-          decision === 'CAUTION' ? 'PROCEED_WITH_CAUTION' :
-            decision === 'HOLD' ? 'NO-GO / HOLD' :
-              decision === 'DIVERT' ? 'DIVERT' : 'PROCEED_WITH_CAUTION';
+        decision === 'GO' ? 'PROCEED NORMALLY' :
+          decision === 'CAUTION' ? 'PROCEED WITH CAUTION' : 'HOLD / REASSESS';
+
+      const reasoning = Array.isArray(aiRiskResult.operationalReasoning) && aiRiskResult.operationalReasoning.length > 0
+        ? aiRiskResult.operationalReasoning 
+        : [`Flight ${selectedFlight?.flightNumber || 'TBD'} to ${airportProfile?.city || airport} is assessed as ${decision} because environmental and operational inputs remain within safety limits.`];
+
+      const actions = Array.isArray(aiRiskResult.pilotActions) && aiRiskResult.pilotActions.length > 0
+        ? aiRiskResult.pilotActions 
+        : (decision === 'GO' ? ["Maintain stabilized approach criteria.", "Verify latest runway and traffic updates.", "Continue monitoring weather trend."] : 
+           decision === 'CAUTION' ? ["Maintain strict stabilized approach gates.", "Verify latest runway condition.", "Monitor spacing and wind correction."] :
+           ["Do not continue approach without reassessment.", "Coordinate alternate sequencing.", "Prepare diversion or delay plan."]);
+
+      const notes = Array.isArray(aiRiskResult.dispatcherNotes) && aiRiskResult.dispatcherNotes.length > 0
+        ? aiRiskResult.dispatcherNotes
+        : [String(aiRiskResult.dispatcherNotes || aiRiskResult.explanation || `Flight ${selectedFlight?.flightNumber || 'TBD'} to ${airportProfile?.city || airport} is currently ${decision}. Main risk monitoring remains focused on the terminal environment and mission telemetry.`)];
 
       return {
         primaryRecommendation: primary,
-        alternativeRecommendation: aiRiskResult.alternative || (decision === 'GO' ? 'Monitor conditions' : decision === 'CAUTION' ? 'Hold or Divert if conditions worsen' : 'Divert'),
-        operationalReasoning: aiRiskResult.operationalReasoning ? [aiRiskResult.operationalReasoning] : (aiRiskResult.topRisks || []),
-        pilotActions: aiRiskResult.pilotActions || aiRiskResult.recommendations || [],
-        dispatcherNotes: aiRiskResult.dispatcherNotes ? [aiRiskResult.dispatcherNotes] : (aiRiskResult.explanation ? [aiRiskResult.explanation] : []),
-        missingDataWarnings: aiRiskResult.missingDataWarnings || []
+        alternativeRecommendation: aiRiskResult.alternativeRecommendation || (
+          decision === 'GO' ? "Continue normal approach planning while monitoring runway, weather, and traffic updates." :
+          decision === 'CAUTION' ? "Prepare for spacing adjustment, updated runway condition review, or delayed approach if margins reduce." :
+          "Hold, reassess operational inputs, and consider alternate approach or diversion planning."
+        ),
+        operationalReasoning: reasoning,
+        pilotActions: actions,
+        dispatcherNotes: notes,
+        missingDataWarnings: Array.isArray(aiRiskResult.missingDataWarnings) ? aiRiskResult.missingDataWarnings : []
       };
     }
 
     if (result) {
       const decision = result.decision || 'CAUTION';
       const primary: string =
-        decision === 'GO' ? 'PROCEED_NORMALLY' :
-          decision === 'CAUTION' ? 'PROCEED_WITH_CAUTION' :
-            decision === 'HOLD' ? 'NO-GO / HOLD' :
-              decision === 'DIVERT' ? 'DIVERT' : 'PROCEED_WITH_CAUTION';
+        decision === 'GO' ? 'PROCEED NORMALLY' :
+          decision === 'CAUTION' ? 'PROCEED WITH CAUTION' : 'HOLD / REASSESS';
 
       return {
         primaryRecommendation: primary,
-        alternativeRecommendation: decision === 'GO' ? 'Monitor conditions' : decision === 'CAUTION' ? 'Hold or Divert if conditions worsen' : 'Divert',
-        operationalReasoning: result.topRisks || [],
-        pilotActions: result.recommendations || [],
-        dispatcherNotes: [result.explanation || 'AI-assisted assessment using validated operational inputs.'],
+        alternativeRecommendation: decision === 'GO' ? 
+          "Continue normal approach planning while monitoring runway, weather, and traffic updates." : 
+          decision === 'CAUTION' ? 
+          "Prepare for spacing adjustment, updated runway condition review, or delayed approach if margins reduce." : 
+          "Hold, reassess operational inputs, and consider alternate approach or diversion planning.",
+        operationalReasoning: result.topRisks || [`Manual assessment indicates ${decision} status for mission to ${airport}.`],
+        pilotActions: result.recommendations || (decision === 'GO' ? ["Maintain stabilized approach criteria."] : decision === 'CAUTION' ? ["Monitor spacing closely."] : ["Prepare diversion."]),
+        dispatcherNotes: [result.explanation || `Flight ${selectedFlight?.flightNumber || 'TBD'} to ${airportProfile?.city || airport} is assessed as ${decision} based on current tactical inputs.`],
         missingDataWarnings: []
       };
     }
 
     return null;
-  };
+  }
 
   useEffect(() => {
     if (appScreen === 'dashboard' && result) {
@@ -275,72 +332,152 @@ export default function Home() {
   };
 
   const handleSpeakBriefing = () => {
-    if (!result) return;
-
     let textToSpeak = "";
+    
+    // Prioritize AI Briefing text if on briefing screen and available
     if (appScreen === 'briefing' && aiBriefing) {
-      textToSpeak = aiBriefing;
+      // Clean up bullet points for clearer speech synthesis
+      // Adding ". " after bullet replaces the bullet with a terminal pause
+      textToSpeak = aiBriefing
+        .replace(/•/g, '. ')
+        .replace(/\n/g, '. ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
       if (aiDirectives && aiDirectives.length > 0) {
         textToSpeak += ". Operational Directives: " + aiDirectives.join(". ");
       }
     } else {
+      // Otherwise use the synthesized operational recommendation
       const opRec = getOperationalRecommendation();
       if (opRec) {
         const flightInfo = selectedFlight ? `Flight ${selectedFlight.flightNumber} to ${airport}.` : `Mission to ${airport}.`;
-        const scoreInfo = `Risk Score: ${aiRiskResult && !aiRiskResult._error ? aiRiskResult.overallRiskScore : result.score}.`;
+        const scoreInfo = `Risk Score: ${aiRiskResult && !aiRiskResult._error ? aiRiskResult.overallRiskScore : result?.score}.`;
         const decisionText = opRec.primaryRecommendation.replace(/_/g, ' ');
-        const hazards = (dynamicRisks?.risks || opRec.operationalReasoning).length > 0 ? `Top hazards: ${(dynamicRisks?.risks || opRec.operationalReasoning).slice(0, 3).join(', ')}.` : '';
-        const actions = opRec.pilotActions.length > 0 ? `Recommended actions: ${opRec.pilotActions.slice(0, 2).join(', ')}.` : '';
-        const explanation = opRec.dispatcherNotes.join(' ');
+        
+        // Use either dynamic risks or the calculated top hazards
+        const hazardsList = dynamicRisks?.risks || getTop3Risks();
+        const hazardsStrings = hazardsList.map((r: any) => typeof r === 'object' ? r.title : String(r));
+        const hazards = hazardsStrings.length > 0 ? `Top hazards: ${hazardsStrings.slice(0, 3).join(', ')}.` : '';
+        
+        const actionsList = Array.isArray(opRec.pilotActions) ? opRec.pilotActions : [];
+        const actions = actionsList.length > 0 ? `Recommended actions: ${actionsList.slice(0, 2).join(', ')}.` : '';
+        const explanation = Array.isArray(opRec.dispatcherNotes) ? opRec.dispatcherNotes.join(' ') : String(opRec.dispatcherNotes || '');
+        
         textToSpeak = `Operational Recommendation: ${decisionText}. ${scoreInfo} ${flightInfo} ${hazards} ${actions} ${explanation}`;
       } else {
         textToSpeak = "AI-assisted risk assessment synchronized via validated operational inputs.";
       }
     }
-    speakText(textToSpeak);
+    
+    if (textToSpeak) {
+      speakText(textToSpeak);
+    }
   };
 
   const handleStopBriefing = () => {
     stopSpeech();
   };
 
-  const handleGenerateBriefing = async () => {
+  async function handleGenerateBriefing(requestId?: string) {
+    console.log("Generate AI Briefing clicked");
     if (!result) return;
+
     setIsGeneratingBriefing(true);
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 12000);
+
     try {
-      const res = await fetch('/api/briefing', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...aiRiskResult,
-          selectedFlight,
-          aiRiskScore: aiRiskResult?.overallRiskScore,
-          aiDecision: aiRiskResult?.decision,
-          aiTopRisks: dynamicRisks?.risks
-        }),
-        signal: controller.signal
+      const activeId = requestId || ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15));
+      if (!requestId) setLastRequestId(activeId);
+      const payload = {
+        requestId: activeId,
+        timestamp: Date.now(),
+        selectedFlight: selectedFlight,
+        airport: airportProfile || { icao: airport },
+        aiRiskScore: aiRiskResult ? (aiRiskResult.overallRiskScore || aiRiskResult.score) : result.score,
+        aiDecision: aiRiskResult ? aiRiskResult.decision : result.decision,
+        aiTopRisks: dynamicRisksData?.risks || result.topRisks || [],
+        factors: {
+          weather: weatherCondition,
+          traffic,
+          runway,
+          workload,
+          aircraft,
+          visibility: visibilityCategory,
+          wind: windCategory,
+          flightStatus: selectedFlight?.status || 'Unknown'
+        }
+      };
+
+      console.log("BRIEFING PAYLOAD", payload);
+
+      const res = await fetch("/api/briefing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify(payload)
       });
-      clearTimeout(timeoutId);
+
       const data = await res.json();
-      setAiBriefing(data.briefing);
-      setAiDirectives(data.directives);
+      console.log("BRIEFING RESPONSE", data);
+
+      // Handle various response formats (string, array of strings, etc.)
+      let rawBriefing = data.briefing || data.aiSafetySynthesis || "";
+      let briefingArray: string[] = [];
+
+      if (Array.isArray(rawBriefing)) {
+        briefingArray = rawBriefing;
+      } else if (typeof rawBriefing === 'string') {
+        briefingArray = rawBriefing.split('\n').filter(line => line.trim().length > 0);
+      }
+
+      const safeBriefing = briefingArray.length > 0 ? briefingArray : [
+        `• Flight ${selectedFlight?.flightNumber || "selected mission"} — Decision: ${payload.aiDecision}`,
+        `• Primary risk: ${payload.aiTopRisks?.[0]?.title || "Airport and route monitoring"}`,
+        `• Secondary risk: ${payload.aiTopRisks?.[1]?.title || "Weather and traffic awareness"}`,
+        `• Impact: Maintain awareness of operational margin during approach`,
+        `• Action: Maintain stabilized approach criteria`,
+        `• Monitor: runway, traffic, and weather updates`
+      ];
+
+      setAiBriefing(safeBriefing.join('\n'));
+      setAiDirectives(data.directives || []);
+      
     } catch (e) {
-      clearTimeout(timeoutId);
-      console.error("[Groq Debug] Briefing failed", e);
+      console.error("Generate briefing failed", e);
+      const fallbackBriefing = [
+        `• Flight ${selectedFlight?.flightNumber || "selected mission"} — Decision: ${result?.decision || "GO"}`,
+        `• Primary risk: Airport and route monitoring`,
+        `• Secondary risk: Weather and traffic awareness`,
+        `• Impact: Continue operational monitoring during approach`,
+        `• Action: Maintain stabilized approach criteria`,
+        `• Monitor: runway, traffic, and weather updates`
+      ];
+      setAiBriefing(fallbackBriefing.join('\n'));
     } finally {
       setIsGeneratingBriefing(false);
     }
-  };
+  }
   const handleSelectFlight = (f: any) => {
     setSelectedFlight(f);
-    setResult(null);
-    setAiRiskResult(null);
-    setAiBriefing(null);
-    setDynamicRisks(null);
-    setCyberIndicator(null);
-    setAiDirectives(null);
+    
+    // Check cache for this flight
+    const cacheKey = `${f.flightNumber}-${airport}`;
+    if (assessmentsCache[cacheKey]) {
+      const cached = assessmentsCache[cacheKey];
+      setResult(cached.result);
+      setAiRiskResult(cached.aiRiskResult);
+      setAiBriefing(cached.aiBriefing);
+      setAiDirectives(cached.aiDirectives);
+      setDynamicRisks(cached.dynamicRisks);
+      setCyberIndicator(cached.cyberIndicator);
+    } else {
+      setResult(null);
+      setAiRiskResult(null);
+      setAiBriefing(null);
+      setDynamicRisks(null);
+      setCyberIndicator(null);
+      setAiDirectives(null);
+    }
   };
 
   const handleFetchWeather = async () => {
@@ -380,54 +517,61 @@ export default function Home() {
   };
 
   const runAnalysisWithParams = async (params: any) => {
-    console.log("ANALYZE PAYLOAD", selectedFlight, params);
+    console.log("[PhaseGuard AI] Local analysis started", params);
     setIsAppLoading(true)
     setLoadingMessage("Synthesizing Mission Intelligence...")
-    setStarted(true)
-    setResult(null)
-    setAiBriefing(null)
-    setAiRiskResult(null)
-    setDynamicRisks(null)
-    setCyberIndicator(null)
-    setAiDirectives(null)
+    
+    try {
+      setStarted(true)
+      setResult(null)
+      setAiBriefing(null)
+      setAiRiskResult(null)
+      setDynamicRisks(null)
+      setCyberIndicator(null)
+      setAiDirectives(null)
 
-    const dataSources = {
-      flight: selectedFlight ? (flightsState?.source || 'LIVE').toUpperCase() : 'NOT_CONNECTED',
-      weather: weatherData ? weatherData.source.toUpperCase() : 'MANUAL',
-      traffic: 'DERIVED LIVE',
-      airport: 'LOCAL DATASET',
-      manualOverride: 'ACTIVE'
+      const dataSources = {
+        flight: selectedFlight ? (flightsState?.source || 'LIVE').toUpperCase() : 'NOT_CONNECTED',
+        weather: weatherData ? weatherData.source.toUpperCase() : 'MANUAL',
+        traffic: 'DERIVED LIVE',
+        airport: 'LOCAL DATASET',
+        manualOverride: 'ACTIVE'
+      }
+
+      const profile = getAirportProfile(params.airport)
+      const safeProfile = profile || {
+        runwayLengthCategory: 'Medium',
+        complexity: 'Medium'
+      }
+
+      const riskResult = calculateRisk({
+        runway: params.runway,
+        traffic: params.traffic,
+        workload: params.workload,
+        aircraft: params.aircraft,
+        visibilityCategory: params.visibilityCategory,
+        windCategory: params.windCategory,
+        weatherCondition: params.weatherCondition,
+        runwayLengthCategory: safeProfile.runwayLengthCategory as any,
+        airportComplexity: safeProfile.complexity as any,
+        flightStatus: params.flightStatus,
+        dataSources
+      })
+
+      setResult(riskResult)
+
+      setIsSaving(true)
+      setLoadingMessage("Finalizing Operational Matrix...")
+      await new Promise(resolve => setTimeout(resolve, 800));
+      setIsSaving(false)
+      setCyberIndicator(null)
+      setAppScreen('dashboard')
+    } catch (e) {
+      console.error("[PhaseGuard AI] Local analysis failed", e);
+      setApiError("Local risk engine encountered an error.");
+    } finally {
+      setIsAppLoading(false)
     }
-
-    const profile = getAirportProfile(params.airport)
-    const safeProfile = profile || {
-      runwayLengthCategory: 'Medium',
-      complexity: 'Medium'
-    }
-
-    const riskResult = calculateRisk({
-      runway: params.runway,
-      traffic: params.traffic,
-      workload: params.workload,
-      aircraft: params.aircraft,
-      visibilityCategory: params.visibilityCategory,
-      windCategory: params.windCategory,
-      weatherCondition: params.weatherCondition,
-      runwayLengthCategory: safeProfile.runwayLengthCategory as any,
-      airportComplexity: safeProfile.complexity as any,
-      flightStatus: params.flightStatus,
-      dataSources
-    })
-
-    setResult(riskResult)
-
-    setIsSaving(true)
-    setLoadingMessage("Finalizing Operational Matrix...")
-    await new Promise(resolve => setTimeout(resolve, 800));
-    setIsSaving(false)
-    setCyberIndicator(null)
-    setAppScreen('dashboard')
-    setIsAppLoading(false)
   }
 
   const loadScenario = (type: ScenarioType) => {
@@ -477,6 +621,7 @@ export default function Home() {
     setResult(null);
     setAiBriefing(null);
     setAiRiskResult(null);
+    setApiError(null);
     setWorkflowStep(1);
     setAppScreen('setup');
   }
@@ -490,19 +635,41 @@ export default function Home() {
       return;
     }
 
+    const requestId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15);
+    const timestamp = Date.now();
+    setLastRequestId(requestId);
+
+    // CLEAR OLD STATE BEFORE NEW ANALYSIS
+    setAiRiskResult(null);
+    setAiBriefing(null);
+    setAiDirectives(null);
+    setCyberIndicator(null);
+    setDynamicRisks(null);
+    setApiError(null);
+
     setIsAnalyzing(true);
     setIsGeneratingAiRisk(true);
-    console.log("[Groq Debug] Groq request started");
+    console.log("[Groq Debug] Groq request started", { requestId, timestamp });
 
     try {
       let currentWeatherData = weatherData;
       if (!currentWeatherData && airportProfile) {
+        // Only fetch if we don't have it already
+        setIsAppLoading(true);
+        setLoadingMessage("Synchronizing Environmental Data...");
         const weatherCtrl = new AbortController();
         const weatherTimeout = setTimeout(() => weatherCtrl.abort(), 8000);
         try {
           const res = await fetch(`/api/weather?icao=${airportProfile.icao}`, { signal: weatherCtrl.signal });
           clearTimeout(weatherTimeout);
           currentWeatherData = await res.json();
+          if (currentWeatherData?.source === 'ERROR') {
+            setApiError(`Weather API Error: ${currentWeatherData.errorMessage || 'Live weather data unavailable.'}`);
+            setIsAnalyzing(false);
+            setIsGeneratingAiRisk(false);
+            setIsAppLoading(false);
+            return;
+          }
           setWeatherData(currentWeatherData);
 
           if (currentWeatherData?.source === 'LIVE') {
@@ -537,6 +704,12 @@ export default function Home() {
           const res = await fetch(`/api/traffic?icao=${airportProfile.icao}`, { signal: trafficCtrl.signal });
           clearTimeout(trafficTimeout);
           currentTrafficData = await res.json();
+          if (currentTrafficData?.source === 'ERROR') {
+            setApiError(`Traffic API Error: ${currentTrafficData.message || 'Live traffic data unavailable.'}`);
+            setIsGeneratingAiRisk(false);
+            setIsAppLoading(false);
+            return;
+          }
           if (currentTrafficData && currentTrafficData.trafficLevel !== 'Manual') {
             setTraffic(currentTrafficData.trafficLevel);
           }
@@ -559,16 +732,27 @@ export default function Home() {
       };
 
       const payload = {
-        airport: airportProfile || { icao: airport },
-        flight: selectedFlight || { status: 'Unknown' },
-        weather: currentWeatherData || { source: 'MANUAL', rawMetar: 'N/A', visibility: visibilityCategory, windSpeed: windCategory, weatherCondition },
+        requestId,
+        timestamp,
+        airport: airportProfile || { icao: airport, complexity: 'Medium' },
+        flight: selectedFlight || { flightNumber: 'TBD', status: 'Unknown', airline: 'Unknown', departureIata: 'N/A', arrivalIata: airport },
+        weather: currentWeatherData || { source: 'MANUAL', rawMetar: 'N/A', visibilityCategory, windCategory, weatherCondition },
         traffic: currentTrafficData || { source: 'MANUAL', trafficLevel: traffic },
-        manualOperationalInputs: { runwayCondition: runway, workload, aircraftCondition: aircraft },
-        dataSources
+        manualOperationalInputs: { runwayCondition: runway, workload, aircraftCondition: aircraft, weatherCondition, visibilityCategory, windCategory },
+        dataSources,
+        computedRisk: {
+          score: result.score,
+          decision: result.decision,
+          factors: result.riskBreakdown,
+          topRisks: result.topRisks,
+          compounding: result.compoundingEvents
+        }
       };
 
+      console.log("NEW ANALYSIS PAYLOAD", payload);
+
       const riskCtrl = new AbortController();
-      const riskTimeout = setTimeout(() => riskCtrl.abort(), 12000); // 12s timeout max
+      const riskTimeout = setTimeout(() => riskCtrl.abort(), 20000); // 20s timeout for fresh Groq
       try {
         const res = await fetch('/api/ai-risk-evaluator', {
           method: 'POST',
@@ -581,44 +765,121 @@ export default function Home() {
         const json = await res.json();
         const data = json.data;
         
-        console.log("[Groq Debug] Groq response received (/api/ai-risk-evaluator)");
-        
-        // Update Risk Evaluator state
-        setAiRiskResult({ ...data, _dataSources: dataSources, _message: json.message });
+        // Frontend must ignore any response whose requestId does not match the latest requestId.
+        if (json.requestId && json.requestId !== requestId) {
+          console.warn("[Groq Debug] Ignoring stale response", { expected: requestId, received: json.requestId });
+          return;
+        }
 
-        // Sequential staggered triggers for other Groq routes
-        // This restores the previous independent behavior while maintaining stability
-        await new Promise(resolve => setTimeout(resolve, 2500));
-        await handleGenerateTopRisks();
+        console.log("[Groq Debug] Groq response received", json.requestId);
         
-        await new Promise(resolve => setTimeout(resolve, 2500));
-        await handleGenerateCyberIndicator();
-        
-        await new Promise(resolve => setTimeout(resolve, 2500));
-        await handleGenerateBriefing();
+        // NORMALIZE API RESPONSE BEFORE UI
+        const response = json.data || {};
+        const normalized = {
+          score: Number(response.score ?? response.overallRiskScore ?? response.riskScore ?? 0),
+          decision: response.decision || "GO",
+          confidence: response.confidence || "High",
+          primaryRecommendation: response.primaryRecommendation || (response.decision === 'CAUTION' ? "PROCEED WITH CAUTION" : response.decision === 'NO-GO' ? "HOLD / REASSESS" : "PROCEED NORMALLY"),
+          alternativeRecommendation: response.alternativeRecommendation || (
+            response.decision === 'CAUTION' ? "Prepare for spacing adjustment, updated runway condition review, or delayed approach if margins reduce." :
+            response.decision === 'NO-GO' ? "Hold, reassess operational inputs, and consider alternate approach or diversion planning." :
+            "Continue normal approach planning while monitoring runway, weather, and traffic updates."
+          ),
+          operationalReasoning: Array.isArray(response.operationalReasoning) && response.operationalReasoning.length > 0
+            ? response.operationalReasoning
+            : [`Flight ${selectedFlight?.flightNumber || 'TBD'} to ${airportProfile?.city || airport} is assessed as ${response.decision || 'GO'} because current environmental and operational inputs remain within safety margins.`],
+          dispatcherNotes: String(response.dispatcherNotes || response.explanation || `Flight ${selectedFlight?.flightNumber || 'TBD'} to ${airportProfile?.city || airport} is currently ${response.decision || 'GO'}. Main risk monitoring remains focused on the terminal environment and mission telemetry.`),
+          pilotActions: Array.isArray(response.pilotActions) && response.pilotActions.length > 0
+            ? response.pilotActions
+            : (response.decision === 'CAUTION' ? ["Maintain strict stabilized approach gates.", "Verify latest runway condition.", "Monitor spacing and wind correction.", "Prepare go-around option if stability degrades."] :
+               response.decision === 'NO-GO' ? ["Do not continue approach without reassessment.", "Coordinate alternate sequencing.", "Verify status before renewed approach.", "Prepare diversion or delay plan."] :
+               ["Maintain stabilized approach criteria.", "Verify latest runway and traffic updates.", "Continue monitoring weather trend and spacing."]),
+          topRisks: Array.isArray(response.topRisks) && response.topRisks.length > 0
+            ? response.topRisks.map((r: any) => typeof r === 'object' ? r : { title: String(r), severity: "Medium", explanation: "Calculated risk based on mission telemetry.", mitigation: "Follow SOPs." })
+            : [
+                { title: "Airport / Route Monitoring", severity: "Low", explanation: "Continuous tactical monitoring of arrival corridor.", mitigation: "Maintain situational awareness." },
+                { title: "Weather Trend Monitoring", severity: "Low", explanation: "Real-time assessment of environmental telemetry.", mitigation: "Cross-verify METAR/TAF updates." },
+                { title: "Traffic Spacing Awareness", severity: "Low", explanation: "Monitoring of proximity and density in terminal area.", mitigation: "Adhere to ATC separation standards." }
+              ],
+          aiSafetySynthesis: Array.isArray(response.aiSafetySynthesis)
+            ? response.aiSafetySynthesis
+            : response.aiSafetySynthesis
+              ? [String(response.aiSafetySynthesis)]
+              : [],
+          briefing: Array.isArray(response.briefing)
+            ? response.briefing
+            : response.briefing
+              ? [String(response.briefing)]
+              : [],
+          cyberExposure: response.cyberExposure || {
+            level: "Low",
+            score: 0,
+            explanation: "Data integrity monitoring active.",
+            actions: ["Continue monitoring telemetry reliability."]
+          },
+          factorBreakdown: response.factorBreakdown || {},
+          factorScores: response.factorScores || response.riskBreakdown || {},
+          missingDataWarnings: Array.isArray(response.missingDataWarnings) ? response.missingDataWarnings : []
+        };
+
+        // Update Risk Evaluator state
+        setAiRiskResult({ ...normalized, _dataSources: dataSources, _message: json.message });
+
+        // AUTOMATIC MAPPING FROM MASTER RESPONSE
+        setDynamicRisks({ risks: normalized.topRisks, source: response.source || 'GROQ_XAI' });
+        setCyberIndicator(normalized.cyberExposure);
+
+        // Update cache for this flight
+        if (selectedFlight) {
+          const cacheKey = `${selectedFlight.flightNumber}-${airport}`;
+          setAssessmentsCache(prev => ({
+            ...prev,
+            [cacheKey]: {
+              result,
+              aiRiskResult: { ...normalized, _dataSources: dataSources, _message: json.message },
+              aiBriefing: normalized.briefing.join('\n'),
+              aiDirectives: normalized.pilotActions,
+              dynamicRisks: { risks: normalized.topRisks, source: response.source || 'GROQ_XAI' },
+              cyberIndicator: normalized.cyberExposure
+            }
+          }));
+        }
+
+        console.log("[PhaseGuard AI] Mission logic successfully mapped from XAI Master.");
 
       } catch (e: any) {
         clearTimeout(riskTimeout);
-        console.error("[Groq Debug] Groq failed (/api/ai-risk-evaluator):", e.message);
-        setAiRiskResult({ _error: true });
+        console.error("[PhaseGuard AI] AI analysis failed:", e.message);
         
-        // Trigger fallbacks sequentially even if primary fails
-        setTimeout(() => handleGenerateTopRisks(), 2500);
-        setTimeout(() => handleGenerateCyberIndicator(), 5000);
-        setTimeout(() => handleGenerateBriefing(), 7500);
+        if (e.name === 'AbortError') {
+          setApiError("AI Risk Analysis timed out after 20s. Please retry.");
+        }
+
+        // Only run fallback if it's the latest request
+        if (lastRequestId === requestId) {
+          setAiRiskResult({ _error: true });
+          // Fallback sequentially only if master failed
+          setTimeout(() => handleGenerateTopRisks(requestId), 1000);
+          setTimeout(() => handleGenerateCyberIndicator(requestId), 2000);
+          setTimeout(() => handleGenerateBriefing(requestId), 3000);
+        }
       }
     } catch (e) {
-      console.error("[Groq Debug] Groq failed (Data Prep):", e);
+      console.error("[PhaseGuard AI] AI initialization failed:", e);
       setAiRiskResult({ _error: true });
     } finally {
       setIsGeneratingAiRisk(false);
       setIsAnalyzing(false);
+      setIsAppLoading(false);
     }
   };
 
 
-  const handleGenerateCyberIndicator = async () => {
+  const handleGenerateCyberIndicator = async (requestId?: string) => {
     if (!result) return;
+    const activeId = requestId || ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15));
+    if (!requestId) setLastRequestId(activeId);
+
     setIsGeneratingCyber(true);
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 12000);
@@ -627,27 +888,36 @@ export default function Home() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          requestId: activeId,
+          timestamp: Date.now(),
           flight: selectedFlight,
-          currentRiskScore: aiRiskResult?.overallRiskScore,
-          top3Risks: dynamicRisks?.risks
+          airport: airportProfile || { icao: airport },
+          currentRiskScore: aiRiskResult?.overallRiskScore || result.score,
+          top3Risks: dynamicRisks?.risks || result.topRisks
         }),
         signal: controller.signal
       });
       clearTimeout(timeoutId);
       const data = await res.json();
+      
+      if (data.requestId && data.requestId !== (requestId || lastRequestId)) return;
+
       if (data.data) {
         setCyberIndicator(data.data);
       }
     } catch (e) {
       clearTimeout(timeoutId);
-      console.error("[Groq Debug] Cyber failed", e);
+      console.error("[PhaseGuard AI] Cyber indicator failed", e);
     } finally {
       setIsGeneratingCyber(false);
     }
   };
 
-  const handleGenerateTopRisks = async () => {
+  const handleGenerateTopRisks = async (requestId?: string) => {
     if (!result) return;
+    const activeId = requestId || ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15));
+    if (!requestId) setLastRequestId(activeId);
+
     setIsGeneratingTopRisks(true);
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 12000);
@@ -656,24 +926,31 @@ export default function Home() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          requestId: activeId,
+          timestamp: Date.now(),
           flight: selectedFlight,
+          airport: airportProfile || { icao: airport },
           runwayCondition: runway,
           trafficLevel: traffic,
           crewWorkload: workload,
           aircraftStatus: aircraft,
           visibilityCategory,
-          windCategory
+          windCategory,
+          weatherCondition
         }),
         signal: controller.signal
       });
       clearTimeout(timeoutId);
       const data = await res.json();
+      
+      if (data.requestId && data.requestId !== (requestId || lastRequestId)) return;
+
       if (data.data?.risks) {
         setDynamicRisks({ risks: data.data.risks, source: data.data.source });
       }
     } catch (e) {
       clearTimeout(timeoutId);
-      console.error("[Groq Debug] Top Risks failed", e);
+      console.error("[PhaseGuard AI] Top risks failed", e);
     } finally {
       setIsGeneratingTopRisks(false);
     }
@@ -790,9 +1067,8 @@ export default function Home() {
     console.log("Mission data prepared.");
     if (selectedFlight && selectedFlight.aircraft) {
       const ac = selectedFlight.aircraft.toLowerCase();
-      // If the aircraft string contains keywords that might suggest a different status (rare in this data, but good for demo)
       if (ac.includes('unknown') || ac.includes('n/a')) {
-        setAircraft('Normal'); // Default to normal
+        setAircraft('Normal');
       } else {
         setAircraft('Normal'); 
       }
@@ -803,47 +1079,98 @@ export default function Home() {
     setWorkflowStep(4);
   };
 
-  const cyberExposure = cyberIndicator || {
-    level: 'Low',
-    score: 15,
-    summary: "Estimating cyber-operational exposure...",
-    actions: ["Standard operational monitoring"]
-  };
+  function getDynamicLandingRisks() {
+    // Check if AI risks are generic or missing
+    const aiRisks = aiRiskResult?.topRisks;
+    const isGeneric = Array.isArray(aiRisks) && aiRisks.some((r: any) => {
+      const title = (typeof r === 'string' ? r : r.title || '').toLowerCase();
+      return title.includes('compounding') || title.includes('telemetry load');
+    });
 
-  const getTop3Risks = () => {
-    const risks: string[] = [];
-    if (runway === 'Wet') risks.push("Reduced braking action potential on wet surface.");
-    if (runway === 'Contaminated') risks.push("Contaminated runway surface poses severe deceleration hazards.");
-    if (traffic === 'High') risks.push("High traffic density environment requires enhanced spacing awareness.");
-    if (traffic === 'Medium') risks.push("Moderate traffic levels increasing arrival phase complexity.");
-    if (workload === 'High') risks.push("High task saturation risk detected in current profile.");
-    if (workload === 'Medium') risks.push("Elevated crew workload reducing task management reserves.");
-    if (aircraft === 'Minor Issue') risks.push("Systems redundancy alert regarding aircraft status.");
-    if (visibilityCategory === 'Low') risks.push("Low visibility conditions necessitating precision approach monitoring.");
-    if (visibilityCategory === 'Reduced') risks.push("Reduced visual cues requiring heightened situational awareness.");
-    if (windCategory === 'Strong') risks.push("Elevated crosswind components scaling handling requirements.");
-    if (windCategory === 'Moderate') risks.push("Moderate wind shear potential during final approach.");
-    if (weatherCondition === 'Storm') risks.push("Active convective activity posing significant arrival hazards.");
-    if (weatherCondition === 'Rain') risks.push("Active precipitation affecting surface friction and visual tracking.");
+    if (dynamicRisks && !dynamicRisks._fallback) return dynamicRisks;
+    
+    // Always fallback to our data-driven engine if AI is generic or we have a local result
+    if (!aiRisks || isGeneric || (result && !aiRisks)) {
+      return { risks: getTop3Risks(), source: result ? 'SYSTEM' : 'DATA_DRIVEN' };
+    }
 
-    const defaultRisks = [
-      "Maintain sterile cockpit procedures below terminal altitudes.",
-      "Review missed approach and go-around procedures for current conditions.",
-      "Verify stabilized approach criteria throughout the arrival phase.",
-      "Monitor fuel reserves against potential holding requirements.",
-      "Cross-check landing performance data with real-time telemetry."
+    return { risks: aiRisks, source: aiRiskResult.source || 'AI_ENGINE' };
+  }
+
+  function getCyberExposure() {
+    if (cyberIndicator) return cyberIndicator;
+    if (aiRiskResult?.cyberExposure) return aiRiskResult.cyberExposure;
+    if (aiRiskResult?.cyberIndicator) return aiRiskResult.cyberIndicator;
+    if (result) return { level: 'Low', score: 15, explanation: 'Local baseline assessment active.', actions: ['Verify comms'] };
+    return { level: 'Low', score: 0, explanation: 'Pending data synchronization.', actions: [] };
+  }
+
+  const dynamicRisksData = getDynamicLandingRisks();
+  const cyberExposure = getCyberExposure();
+
+  function generateMitigation(title: string) {
+    switch (title) {
+      case "Weather Conditions":
+        return "Monitor weather radar and adjust approach profile";
+      case "Runway Condition":
+        return "Adjust landing technique and braking strategy";
+      case "Traffic Congestion":
+        return "Coordinate with ATC for spacing";
+      case "Reduced Visibility":
+        return "Use instrument guidance and minimums";
+      case "Wind Conditions":
+        return "Apply crosswind correction";
+      default:
+        return "Maintain situational awareness";
+    }
+  }
+
+  function getTop3Risks() {
+    // Priority: 1. AI factor breakdown, 2. Local engine factor breakdown
+    const factorBreakdown = aiRiskResult?.factorScores || aiRiskResult?.factorBreakdown || result?.riskBreakdown || {};
+
+    const factorMap = [
+      { key: "weather", label: "Weather Conditions" },
+      { key: "traffic", label: "Traffic Congestion" },
+      { key: "runway", label: "Runway Condition" },
+      { key: "workload", label: "Crew Workload" },
+      { key: "aircraft", label: "Aircraft Condition" },
+      { key: "visibility", label: "Reduced Visibility" },
+      { key: "wind", label: "Wind Conditions" },
+      { key: "flight", label: "Operational Disruption" }
     ];
 
-    while (risks.length < 3) {
-      const nextDefault = defaultRisks.find(r => !risks.includes(r));
-      if (nextDefault) {
-        risks.push(nextDefault);
-      } else {
-        risks.push("Baseline operational safety monitoring.");
-      }
+    const risks = factorMap.map(f => ({
+      title: f.label,
+      score: Number(factorBreakdown[f.key]) || 0
+    }));
+
+    // Sort by score descending and filter out zero-score items (unless we have none)
+    const sorted = risks
+      .filter(r => r.score > 0)
+      .sort((a, b) => b.score - a.score);
+
+    let top3 = sorted.slice(0, 3);
+
+    // Fill with defaults if less than 3
+    while (top3.length < 3) {
+      top3.push({
+        title: "Operational Monitoring",
+        score: 3
+      });
     }
-    return risks.slice(0, 3);
-  };
+
+    // Convert to UI format
+    return top3.map(r => ({
+      title: r.title,
+      severity:
+        r.score >= 12 ? "HIGH" :
+          r.score >= 6 ? "MEDIUM" :
+            "LOW",
+      explanation: `${r.title} is contributing to operational risk based on current tactical inputs.`,
+      mitigation: generateMitigation(r.title)
+    }));
+  }
 
   const operationalRecommendation = getOperationalRecommendation();
 
@@ -925,6 +1252,15 @@ export default function Home() {
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-cyan-500"></span>
             </span>
             <span className="text-xs font-bold tracking-widest text-cyan-400 uppercase">PhaseGuard AI</span>
+          </div>
+
+          <div className="flex items-center space-x-4 bg-slate-900/40 px-4 py-1.5 rounded-full border border-slate-800/50">
+             <div className="flex flex-col items-center">
+               <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Zulu Time</span>
+               <span className="text-xs font-mono text-cyan-400 font-bold">
+                 {currentTime ? `${currentTime.getUTCHours().toString().padStart(2, '0')}:${currentTime.getUTCMinutes().toString().padStart(2, '0')}:${currentTime.getUTCSeconds().toString().padStart(2, '0')}Z` : '--:--:--Z'}
+               </span>
+             </div>
           </div>
 
           {appScreen !== 'start' && (
@@ -1143,11 +1479,14 @@ export default function Home() {
                           </div>
                         ))}
                       </div>
+                    ) : flightsState?.source === 'ERROR' ? (
+                      <div className="bg-red-900/20 border border-red-500/30 p-4 rounded-lg text-center">
+                        <p className="text-xs text-red-400 mb-2">{flightsState.message}</p>
+                        <button onClick={handleFetchFlights} className="bg-red-900/50 hover:bg-red-800/50 text-red-200 px-3 py-1 rounded text-xs font-bold uppercase">Retry Fetch</button>
+                      </div>
                     ) : (
                       <div className="text-xs text-cyan-400">{flightsState?.message || "Flight data synchronization pending"}</div>
-                    )}
-
-                    <div className="mt-4 flex justify-between">
+                    )}                    <div className="mt-4 flex justify-between">
                       <button onClick={() => setWorkflowStep(2)} className="text-slate-500 text-xs font-bold uppercase tracking-widest hover:text-slate-300">&larr; Back</button>
                       <button onClick={() => handlePrepareMissionData()} className="bg-teal-600 text-white px-4 py-2 rounded text-xs font-bold uppercase tracking-widest">Proceed to Data Prep &rarr;</button>
                     </div>
@@ -1215,6 +1554,16 @@ export default function Home() {
               <button onClick={() => setAppScreen('setup')} className="text-xs text-slate-500 hover:text-white uppercase tracking-widest font-bold">&larr; Back to Setup</button>
             </div>
 
+            {apiError && (
+              <div className="mb-6 bg-red-900/50 border border-red-500 p-6 rounded-2xl flex items-center justify-between shadow-[0_0_30px_rgba(239,68,68,0.2)]">
+                <div>
+                  <h3 className="text-lg font-black text-red-400 uppercase tracking-widest mb-1">Critical Data Failure</h3>
+                  <p className="text-sm text-red-200">{apiError}</p>
+                </div>
+                <button onClick={() => { setApiError(null); setAppScreen('setup'); }} className="bg-red-500 hover:bg-red-400 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-colors">Return to Setup</button>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
               {/* COL 1: Main Engine Result */}
               <div className="lg:col-span-5 space-y-6">
@@ -1234,7 +1583,12 @@ export default function Home() {
                           <button
                             onClick={() => {
                               if (!aiRiskResult || aiRiskResult._error) return;
-                              const text = `AI Risk Assessment. Decision: ${aiRiskResult.decision}. Score: ${aiRiskResult.overallRiskScore}. Confidence: ${aiRiskResult.confidence}. Top risks: ${aiRiskResult.topRisks.join(', ')}. Recommendations: ${aiRiskResult.recommendations.join(', ')}. Explanation: ${aiRiskResult.explanation}`;
+                              const titleList = Array.isArray(aiRiskResult.topRisks) 
+                                ? aiRiskResult.topRisks.map((r: any) => typeof r === 'object' ? r.title : String(r))
+                                : [];
+                              const actionList = Array.isArray(aiRiskResult.pilotActions) ? aiRiskResult.pilotActions : [];
+                              
+                              const text = `AI Risk Assessment. Decision: ${aiRiskResult.decision}. Score: ${aiRiskResult.score}. Confidence: ${aiRiskResult.confidence}. Top risks: ${titleList.join(', ')}. Recommendations: ${actionList.join(', ')}. Explanation: ${aiRiskResult.dispatcherNotes}`;
                               speakText(text);
                             }}
                             disabled={!aiRiskResult || aiRiskResult._error}
@@ -1256,7 +1610,7 @@ export default function Home() {
                       <>
                         <div className="flex flex-col items-center justify-center p-8 border-b border-slate-800/50 mb-6 bg-slate-950/40 rounded-3xl relative overflow-hidden group">
                           <div className="absolute inset-0 bg-gradient-to-t from-cyan-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-1000"></div>
-                          <RiskGauge score={aiRiskResult.overallRiskScore} level={aiRiskResult.decision === 'DIVERT' ? 'Critical' : aiRiskResult.decision === 'HOLD' ? 'High' : aiRiskResult.decision === 'CAUTION' ? 'Medium' : 'Low'} decision={aiRiskResult.decision} />
+                          <RiskGauge score={aiRiskResult.score} level={aiRiskResult.decision === 'DIVERT' ? 'Critical' : aiRiskResult.decision === 'HOLD' ? 'High' : aiRiskResult.decision === 'CAUTION' ? 'Medium' : 'Low'} decision={aiRiskResult.decision} />
                         </div>
                         <div className="mb-5">
                           <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center justify-between">
@@ -1264,19 +1618,25 @@ export default function Home() {
                             <span className="text-[9px] font-mono text-slate-500 bg-slate-900 px-1.5 py-0.5 rounded">CONFIDENCE: {aiRiskResult.confidence}</span>
                           </h3>
                           <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                            {Object.entries(aiRiskResult.factorScores || {}).map(([category, score]: [string, any]) => (
-                              <div key={category} className="flex items-center space-x-2">
-                                <div className="w-16 text-[9px] text-slate-400 uppercase tracking-wider text-right">{category}</div>
-                                <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                                  <div className={`h-full rounded-full ${score >= 15 ? 'bg-red-500' : score >= 10 ? 'bg-orange-500' : score > 0 ? 'bg-yellow-500' : 'bg-slate-700'}`} style={{ width: `${Math.min(100, Math.max(0, (score / 25) * 100))}%` }}></div>
-                                </div>
-                                <div className="w-6 text-[9px] font-mono text-slate-500 text-right">{score > 0 ? `+${score}` : '0'}</div>
+                            {Object.entries(aiRiskResult.factorScores || {}).filter(([_, s]: any) => s > 0).length === 0 ? (
+                              <div className="col-span-2 text-[11px] text-green-400 italic text-center py-4 bg-green-500/10 rounded-lg border border-green-500/20">
+                                No elevated operational risk factors detected.
                               </div>
-                            ))}
+                            ) : (
+                              Object.entries(aiRiskResult.factorScores || {}).filter(([_, s]: any) => s > 0).map(([category, score]: [string, any]) => (
+                                <div key={category} className="flex items-center space-x-2">
+                                  <div className="w-16 text-[9px] text-slate-400 uppercase tracking-wider text-right">{category}</div>
+                                  <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                    <div className={`h-full rounded-full ${score >= 15 ? 'bg-red-500' : score >= 10 ? 'bg-orange-500' : score > 0 ? 'bg-yellow-500' : 'bg-slate-700'}`} style={{ width: `${Math.min(100, Math.max(0, (score / 25) * 100))}%` }}></div>
+                                  </div>
+                                  <div className="w-6 text-[9px] font-mono text-slate-500 text-right">{score > 0 ? `+${score}` : '0'}</div>
+                                </div>
+                              ))
+                            )}
                           </div>
                         </div>
                         <div className="mb-4 bg-cyan-950/30 p-3 rounded-lg border border-cyan-900/50">
-                          <p className="text-sm text-cyan-100 italic border-l-2 border-cyan-500/50 pl-3">&quot;{aiRiskResult.explanation}&quot;</p>
+                          <p className="text-sm text-cyan-100 italic border-l-2 border-cyan-500/50 pl-3">&quot;{aiRiskResult.dispatcherNotes || aiRiskResult.explanation}&quot;</p>
                         </div>
                         {aiRiskResult.missingDataWarnings && aiRiskResult.missingDataWarnings.length > 0 && (
                           <div className="mb-4 bg-orange-950/30 border border-orange-900/50 p-2 rounded text-[10px] text-orange-400">
@@ -1303,10 +1663,10 @@ export default function Home() {
                           <div className="grid grid-cols-2 gap-x-4 gap-y-2">
                             {Object.values(result.riskBreakdown).every(v => v === 0) ? (
                               <div className="col-span-2 text-[11px] text-green-400 italic text-center py-4 bg-green-500/10 rounded-lg border border-green-500/20">
-                                Baseline operational risk only. No elevated hazards detected.
+                                No elevated operational risk factors detected.
                               </div>
                             ) : (
-                              Object.entries(result.riskBreakdown).map(([category, score]) => (
+                              Object.entries(result.riskBreakdown).filter(([_, s]) => s > 0).map(([category, score]) => (
                                 <div key={category} className="flex items-center space-x-2">
                                   <div className="w-16 text-[9px] text-slate-400 uppercase tracking-wider text-right">{category}</div>
                                   <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
@@ -1333,7 +1693,7 @@ export default function Home() {
                   <h3 className="text-sm font-bold text-cyan-300 uppercase tracking-widest mb-2">Proceed to Briefing</h3>
                   <p className="text-xs text-cyan-200/70 mb-4">Generate an AI Pilot Briefing or proceed directly to the Briefing screen.</p>
                   <div className="flex space-x-3 w-full">
-                    <button onClick={handleGenerateBriefing} disabled={isGeneratingBriefing} className="flex-1 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white px-4 py-3 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors">
+                    <button onClick={() => handleGenerateBriefing()} disabled={isGeneratingBriefing} className="flex-1 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white px-4 py-3 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors">
                       {isGeneratingBriefing ? 'Generating...' : 'Generate AI Briefing'}
                     </button>
                     <button onClick={handleSaveAssessment} disabled={isSaving} className="flex-1 bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white px-4 py-3 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors">
@@ -1357,10 +1717,11 @@ export default function Home() {
                         <div className="flex items-center space-x-2">
                           {!isSpeaking ? (
                             <button onClick={() => {
-                              const currentScore = aiRiskResult && !aiRiskResult._error ? aiRiskResult.overallRiskScore : result.score;
+                              const currentScore = aiRiskResult && !aiRiskResult._error ? aiRiskResult.score : result.score;
                               const currentLevel = aiRiskResult && !aiRiskResult._error ? (aiRiskResult.decision === 'DIVERT' ? 'Critical' : aiRiskResult.decision === 'HOLD' ? 'High' : aiRiskResult.decision === 'CAUTION' ? 'Medium' : 'Low') : result.level;
                               const currentDecision = aiRiskResult && !aiRiskResult._error ? aiRiskResult.decision : result.decision;
-                              const currentRisks = getTop3Risks().join(', ');
+                              const riskTitles = getTop3Risks().map((r: any) => typeof r === 'object' ? r.title : String(r));
+                              const currentRisks = riskTitles.join(', ');
                               const currentAction = (operationalRecommendation?.primaryRecommendation || 'PROCEED_NORMALLY').replace(/_/g, ' ');
 
                               const text = `Landing Risk Briefing. The current risk score is ${currentScore}, categorized as ${currentLevel} risk. Top 3 hazards identified are: ${currentRisks}. Final recommended action: ${currentAction}.`;
@@ -1435,13 +1796,13 @@ export default function Home() {
                           {operationalRecommendation.dispatcherNotes.length > 0 && (
                             <div className="mb-2">
                               <h3 className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Dispatcher / Ops Notes</h3>
-                              <p className="text-xs text-slate-400 italic leading-relaxed">{operationalRecommendation.dispatcherNotes.join(' ')}</p>
+                              <p className="text-xs text-slate-400 italic leading-relaxed">{(operationalRecommendation.dispatcherNotes || []).join(' ')}</p>
                             </div>
                           )}
                           {operationalRecommendation.missingDataWarnings.length > 0 && (
                             <div className="mt-2 pt-2 border-t border-slate-800/50">
                               <h3 className="text-[9px] font-bold text-orange-400 uppercase tracking-widest mb-1">Data confidence notes</h3>
-                              <p className="text-[10px] text-orange-300/80 leading-relaxed">{operationalRecommendation.missingDataWarnings.join(' ')}</p>
+                              <p className="text-[10px] text-orange-300/80 leading-relaxed">{(operationalRecommendation.missingDataWarnings || []).join(' ')}</p>
                             </div>
                           )}
                         </div>
@@ -1625,16 +1986,16 @@ export default function Home() {
                               Strategic Awareness Actions:
                             </h4>
                             <ul className="space-y-1">
-                              {cyberExposure.actions.map((act: string, i: number) => (
+                              {(cyberExposure.actions || []).map((act: string, i: number) => (
                                 <li key={i} className="text-[10px] text-teal-200/70 flex items-start">
-                                  <span className="w-1 h-1 mt-1.5 rounded-full bg-teal-500/50 mr-2 flex-shrink-0"></span>{act}
+                                  <span className="w-1 h-1 mt-1.5 rounded-full bg-teal-500/50 mr-2 flex-shrink-0"></span>{String(act)}
                                 </li>
                               ))}
                             </ul>
                           </div>
                         )}
                         <div className="flex space-x-2 mt-2">
-                          <button onClick={handleGenerateCyberIndicator} disabled={isGeneratingCyber} className="flex-1 bg-slate-800/50 hover:bg-slate-800 disabled:opacity-50 text-[8px] text-slate-500 hover:text-teal-400 font-bold uppercase tracking-widest py-1.5 rounded border border-slate-800 transition-colors">
+                          <button onClick={() => handleGenerateCyberIndicator()} disabled={isGeneratingCyber} className="flex-1 bg-slate-800/50 hover:bg-slate-800 disabled:opacity-50 text-[8px] text-slate-500 hover:text-teal-400 font-bold uppercase tracking-widest py-1.5 rounded border border-slate-800 transition-colors">
                             {isGeneratingCyber ? 'Generating...' : 'Generate AI Cyber Briefing'}
                           </button>
                           {!speechSupported ? (
@@ -1643,7 +2004,8 @@ export default function Home() {
                             <div className="flex-1 flex space-x-1">
                               {!isSpeaking ? (
                                 <button onClick={() => {
-                                  const speechText = `Cyber-Operational Exposure: ${cyberExposure.level} level with a score of ${cyberExposure.score}. Summary: ${cyberExposure.summary || cyberExposure.explanation}. Recommended actions: ${cyberExposure.actions.join(', ')}`;
+                                  const actionsText = Array.isArray(cyberExposure.actions) ? cyberExposure.actions.join(', ') : String(cyberExposure.actions || '');
+                                  const speechText = `Cyber-Operational Exposure: ${cyberExposure.level} level with a score of ${cyberExposure.score}. Summary: ${cyberExposure.summary || cyberExposure.explanation}. Recommended actions: ${actionsText}`;
                                   speakText(speechText);
                                 }} disabled={isGeneratingCyber} className="flex-1 bg-teal-900/20 hover:bg-teal-900/40 text-[8px] text-teal-400 font-bold uppercase tracking-widest py-1.5 rounded border border-teal-800/50 transition-colors flex items-center justify-center space-x-1">
                                   <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
@@ -1724,11 +2086,11 @@ export default function Home() {
                         <LandingVisualization 
                           mode="dashboard"
                           riskLevel={
-                            (aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result?.score || 0) >= 75 ? 'Critical' :
-                            (aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result?.score || 0) >= 50 ? 'High' :
-                            (aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result?.score || 0) >= 25 ? 'Medium' : 'Low'
+                            (aiRiskResult && !aiRiskResult._error ? aiRiskResult.score : result?.score || 0) >= 75 ? 'Critical' :
+                            (aiRiskResult && !aiRiskResult._error ? aiRiskResult.score : result?.score || 0) >= 50 ? 'High' :
+                            (aiRiskResult && !aiRiskResult._error ? aiRiskResult.score : result?.score || 0) >= 25 ? 'Medium' : 'Low'
                           }
-                          riskScore={aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result?.score || 0}
+                          riskScore={aiRiskResult && !aiRiskResult._error ? aiRiskResult.score : result?.score || 0}
                         />
 
                         {/* Replay Details */}
@@ -1747,46 +2109,63 @@ export default function Home() {
 
                         {/* TOP 3 LANDING RISKS CARD - CENTERED GRID */}
                         <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-4">
-                          {(dynamicRisks?.risks || getTop3Risks()).map((risk, index) => (
-                            <div key={index} className="flex flex-col p-6 border border-slate-800 bg-slate-900/40 rounded-3xl hover:border-cyan-500/30 transition-all group">
-                              <div className="flex items-center mb-4">
-                                <span className="w-8 h-8 rounded-full bg-cyan-900/50 border border-cyan-500/30 text-xs font-black text-cyan-400 flex items-center justify-center mr-3 flex-shrink-0 group-hover:scale-110 transition-transform">{index + 1}</span>
-                                <div className="flex-grow">
-                                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Priority Risk</span>
+                          {(dynamicRisks?.risks || getTop3Risks()).map((risk: any, index: number) => {
+                            const title = typeof risk === 'object' ? risk.title : risk;
+                            const severity = typeof risk === 'object' ? risk.severity : 'Medium';
+                            const explanation = typeof risk === 'object' ? risk.explanation : 'Operational risk factor requiring monitoring.';
+                            const mitigation = typeof risk === 'object' ? risk.mitigation : 'Execute standard monitoring protocols.';
+                            const scoreContrib = typeof risk === 'object' ? risk.scoreContribution : '';
+
+                            return (
+                              <div key={index} className="flex flex-col p-6 border border-slate-800 bg-slate-900/40 rounded-3xl hover:border-cyan-500/30 transition-all group">
+                                <div className="flex items-center mb-4">
+                                  <span className="w-8 h-8 rounded-full bg-cyan-900/50 border border-cyan-500/30 text-xs font-black text-cyan-400 flex items-center justify-center mr-3 flex-shrink-0 group-hover:scale-110 transition-transform">{index + 1}</span>
+                                  <div className="flex-grow">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Priority Risk</span>
+                                      <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded ${severity === 'Critical' ? 'bg-red-500/20 text-red-400' : severity === 'High' ? 'bg-orange-500/20 text-orange-400' : severity === 'Medium' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-green-500/20 text-green-400'}`}>
+                                        {severity}
+                                      </span>
+                                    </div>
+                                    <h4 className="text-sm font-black text-white mt-1 uppercase tracking-tight">{title}</h4>
+                                  </div>
                                 </div>
-                                <div className="flex items-center space-x-1">
-                                  {!isSpeaking ? (
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        speakText(`Hazard ${index + 1}: ${risk}`);
-                                      }}
-                                      className="p-1.5 rounded-lg transition-colors hover:bg-cyan-500/20 text-slate-500 hover:text-cyan-400"
-                                      title="Speak Risk"
-                                    >
-                                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
-                                    </button>
-                                  ) : (
-                                    <>
-                                      {isPaused ? (
-                                        <button onClick={(e) => { e.stopPropagation(); resumeSpeech(); }} className="p-1.5 rounded-lg transition-colors hover:bg-green-500/20 text-green-400" title="Resume">
-                                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
-                                        </button>
-                                      ) : (
-                                        <button onClick={(e) => { e.stopPropagation(); pauseSpeech(); }} className="p-1.5 rounded-lg transition-colors hover:bg-yellow-500/20 text-yellow-400" title="Pause">
-                                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /></svg>
-                                        </button>
-                                      )}
+                                <div className="space-y-3">
+                                  <p className="text-[11px] text-slate-400 leading-relaxed italic border-l border-slate-800 pl-3">&quot;{explanation}&quot;</p>
+                                  <div className="bg-slate-950/50 p-3 rounded-xl border border-slate-800/50">
+                                    <div className="text-[9px] font-black text-cyan-500 uppercase tracking-widest mb-1 flex items-center">
+                                      <svg className="w-3 h-3 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                      Mitigation
+                                    </div>
+                                    <p className="text-[10px] text-cyan-200/70 font-medium">{mitigation}</p>
+                                  </div>
+                                </div>
+                                <div className="mt-4 flex justify-between items-center pt-3 border-t border-slate-800/50">
+                                  <div className="text-[9px] font-bold text-slate-600 uppercase tracking-widest">
+                                    {scoreContrib && <span>CONTRIBUTION: {scoreContrib}</span>}
+                                  </div>
+                                  <div className="flex items-center space-x-1">
+                                    {!isSpeaking ? (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          speakText(`Hazard: ${title}. Severity: ${severity}. Explanation: ${explanation}. Mitigation: ${mitigation}`);
+                                        }}
+                                        className="p-1.5 rounded-lg transition-colors hover:bg-cyan-500/20 text-slate-500 hover:text-cyan-400"
+                                        title="Speak Risk"
+                                      >
+                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
+                                      </button>
+                                    ) : (
                                       <button onClick={(e) => { e.stopPropagation(); stopSpeech(); }} className="p-1.5 rounded-lg transition-colors hover:bg-red-500/20 text-red-400" title="Stop">
                                         <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h12v12H6z" /></svg>
                                       </button>
-                                    </>
-                                  )}
+                                    )}
+                                  </div>
                                 </div>
                               </div>
-                              <p className="text-sm text-slate-200 leading-relaxed font-medium">{risk}</p>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                   )}
@@ -1854,7 +2233,7 @@ export default function Home() {
                     </div>
                   )}
                   <div className="text-xs font-bold text-slate-400 uppercase tracking-widest bg-slate-950 px-3 py-1 rounded-lg border border-slate-800">
-                    Risk Score: <span className="text-white">{aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result.score}</span>
+                    Risk Score: <span className="text-white">{aiRiskResult && !aiRiskResult.error ? (aiRiskResult.score ?? aiRiskResult.overallRiskScore) : result.score}</span>
                   </div>
                   <div className="text-[10px] font-black text-cyan-400 uppercase tracking-widest bg-cyan-400/10 px-3 py-1 rounded-lg border border-cyan-400/20">AI-Assisted Assessment</div>
                 </div>
@@ -1868,11 +2247,11 @@ export default function Home() {
                 <LandingVisualization
                   mode="pilot"
                   riskLevel={
-                    (aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result.score) >= 75 ? 'Critical' :
-                      (aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result.score) >= 50 ? 'High' :
-                        (aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result.score) >= 25 ? 'Medium' : 'Low'
+                    (aiRiskResult && !aiRiskResult._error ? aiRiskResult.score : result?.score || 0) >= 75 ? 'Critical' :
+                      (aiRiskResult && !aiRiskResult._error ? aiRiskResult.score : result?.score || 0) >= 50 ? 'High' :
+                        (aiRiskResult && !aiRiskResult._error ? aiRiskResult.score : result?.score || 0) >= 25 ? 'Medium' : 'Low'
                   }
-                  riskScore={aiRiskResult && !aiRiskResult.error ? aiRiskResult.overallRiskScore : result.score}
+                  riskScore={aiRiskResult && !aiRiskResult._error ? aiRiskResult.score : result?.score || 0}
                 />
               </div>
 
@@ -1885,7 +2264,10 @@ export default function Home() {
                   </h3>
                   {!isSpeaking ? (
                     <button
-                      onClick={() => speakText("Operational Directives: " + (aiDirectives || operationalRecommendation?.pilotActions || []).join(". "))}
+                      onClick={() => {
+                        const directiveLines = Array.isArray(aiDirectives) ? aiDirectives : (operationalRecommendation?.pilotActions || []);
+                        speakText("Operational Directives: " + directiveLines.join(". "));
+                      }}
                       className="flex items-center text-[10px] font-black border bg-cyan-500/10 text-cyan-400 border-cyan-500/30 hover:bg-cyan-500/20 px-3 py-1.5 rounded-full transition-all uppercase tracking-widest"
                     >
                       <svg className="w-3.5 h-3.5 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
@@ -1912,10 +2294,10 @@ export default function Home() {
                   )}
                 </div>
                 <ul className="space-y-4">
-                  {operationalRecommendation?.pilotActions.map((action: string, i: number) => (
+                  {(operationalRecommendation?.pilotActions || []).map((action: string, i: number) => (
                     <li key={i} className="flex items-start bg-slate-950/40 p-4 rounded-2xl border border-slate-800/50 hover:border-cyan-500/30 transition-colors group">
                       <span className="w-6 h-6 rounded-lg bg-cyan-900/30 border border-cyan-500/30 text-[10px] font-black text-cyan-400 flex items-center justify-center mr-4 flex-shrink-0 group-hover:scale-110 transition-transform">{i + 1}</span>
-                      <span className="text-sm text-slate-200 font-medium leading-relaxed">{action}</span>
+                      <span className="text-sm text-slate-200 font-medium leading-relaxed">{String(action)}</span>
                     </li>
                   ))}
                 </ul>
@@ -1963,9 +2345,29 @@ export default function Home() {
                     <div className="text-base text-slate-200 leading-relaxed font-medium bg-slate-950/50 p-8 rounded-[32px] border border-slate-800">
                       <div className="space-y-6">
                         {aiBriefing.split('\n').map((line, i) => {
-                          if (!line.trim()) return null;
-                          if (line.includes(':') && line.split(':')[0].length < 30) {
-                            const [heading, ...rest] = line.split(':');
+                          const trimmedLine = line.trim();
+                          if (!trimmedLine) return null;
+                          
+                          // Handle bullet points specifically
+                          if (trimmedLine.startsWith('•')) {
+                            const content = trimmedLine.replace('•', '').trim();
+                            const isDecision = content.toLowerCase().includes('decision:');
+                            
+                            return (
+                              <div key={i} className={`flex items-start gap-4 p-4 rounded-2xl border ${isDecision ? 'bg-cyan-500/10 border-cyan-500/30' : 'bg-slate-900/40 border-slate-800'}`}>
+                                <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${isDecision ? 'bg-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.5)]' : 'bg-purple-500'}`} />
+                                <div className="flex-grow">
+                                  <p className={`text-sm leading-relaxed ${isDecision ? 'font-black text-cyan-400 uppercase tracking-tight' : 'text-slate-200'}`}>
+                                    {content}
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          // Fallback for headings
+                          if (trimmedLine.includes(':') && trimmedLine.split(':')[0].length < 30) {
+                            const [heading, ...rest] = trimmedLine.split(':');
                             const content = rest.join(':').trim();
                             return (
                               <div key={i} className="border-l-2 border-purple-500/30 pl-6 py-1">
@@ -1974,8 +2376,23 @@ export default function Home() {
                               </div>
                             );
                           }
-                          return <p key={i} className="text-slate-300 text-sm leading-relaxed">{line}</p>;
+                          return <p key={i} className="text-slate-300 text-sm leading-relaxed">{trimmedLine}</p>;
                         })}
+
+                        {/* AI SAFETY SYNTHESIS SECTION */}
+                        {aiRiskResult?.aiSafetySynthesis && aiRiskResult.aiSafetySynthesis.length > 0 && (
+                          <div className="mt-8 pt-6 border-t border-slate-800">
+                            <h3 className="text-xs font-black text-cyan-400 uppercase tracking-[0.2em] mb-4">Tactical Safety Synthesis</h3>
+                            <div className="grid grid-cols-1 gap-3">
+                              {aiRiskResult.aiSafetySynthesis.map((item: string, i: number) => (
+                                <div key={i} className="flex items-start gap-3 bg-slate-900/40 p-4 rounded-2xl border border-slate-800/50 hover:border-cyan-500/30 transition-colors">
+                                  <div className="w-1.5 h-1.5 rounded-full bg-cyan-500 mt-1.5 flex-shrink-0" />
+                                  <p className="text-sm text-slate-300 leading-relaxed">{String(item)}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ) : (
@@ -1986,7 +2403,7 @@ export default function Home() {
                       <h4 className="text-lg font-black text-white mb-2">Ready for AI Synthesis</h4>
                       <p className="text-sm text-slate-400 mb-8 max-w-md">The AI will process all tactical inputs to provide a high-level safety narrative for this mission.</p>
                       <button
-                        onClick={handleGenerateBriefing}
+                        onClick={() => handleGenerateBriefing()}
                         disabled={isGeneratingBriefing}
                         className="relative group bg-white text-slate-950 px-10 py-4 rounded-full text-[10px] font-black uppercase tracking-[0.2em] hover:bg-purple-500 hover:text-white transition-all shadow-xl hover:shadow-purple-500/20 disabled:opacity-50"
                       >

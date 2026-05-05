@@ -1,155 +1,157 @@
 import { NextResponse } from 'next/server';
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function POST(request: Request) {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 12000);
+  const body = await request.json();
+  const { flight = {}, airport = {}, requestId, timestamp, aiRiskScore, aiDecision, aiTopRisks, factors = {} } = body;
+  
+  console.log(`[Briefing API] NEW REQUEST | ID: ${requestId} | TIME: ${timestamp}`);
 
-  let body: any = {};
-  try {
-    body = await request.json();
-  } catch (e) {
-    console.error('Failed to parse request body:', e);
-  }
-
-  const { selectedFlight, flightNumber, airline, departureIata, arrivalIata, status, scheduledTime } = body;
-  const flight = selectedFlight || { flightNumber, airline, departureIata, arrivalIata, status, scheduledTime };
   const apiKey = process.env.GROQ_API_KEY;
   const model = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
-  console.log("--------------------------------------------------");
-  console.log("[Groq Debug] Route: /api/briefing");
-  console.log(`[Groq Debug] Flight: ${flight.flightNumber} | Status: ${flight.status}`);
-  console.log("[Groq Debug] Key loaded:", !!apiKey);
-  console.log("[Groq Debug] Model used:", model);
 
   if (!apiKey) {
-     clearTimeout(timeoutId);
-     console.error("[Groq Debug] Groq failed: API key missing");
-     const fallback = generateFallbackBriefing(body);
-     return NextResponse.json({ success: true, briefing: fallback.briefing, directives: fallback.directives });
+    return NextResponse.json({
+      requestId,
+      briefing: `- Flight ${flight.flightNumber || 'TBD'} from ${flight.departureIata || 'N/A'} to ${flight.arrivalIata || airport.icao || 'N/A'} is assessed as ${aiDecision} with a risk score of ${aiRiskScore}\n- Primary risk drivers: ${factors.weather || 'Weather'} and ${factors.traffic || 'Traffic'}\n- Operational impact: Standard safety margin compression\n- Pilot action: Verify local environmental data\n- Monitoring: Continuous telemetry check\n- Final guidance: Proceed with high situational awareness`,
+      directives: ["Verify landing data", "Monitor METAR trends"],
+      _fallback: true
+    }, { 
+      headers: { 
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      } 
+    });
   }
-
-  const generateAiBriefing = async (retryCount = 0) => {
-    if (retryCount > 0) {
-      console.log(`[Groq Debug] Retry attempt ${retryCount}...`);
-      await new Promise(resolve => setTimeout(resolve, 2000));
-    }
-
-    console.log("[Groq Debug] Request sent");
-    const prompt = `
-Analyze the SELECTED FLIGHT SPECIFICALLY: ${flight.flightNumber} (${flight.airline}) from ${flight.departureIata || 'N/A'} to ${flight.arrivalIata || 'N/A'}.
-
-Analyze this specific selected flight and mission context. Do not return generic output. Your response must change based on flight status (${flight.status}), route, airport, weather, runway, traffic, workload, aircraft status, and data confidence.
-
-Mention the flight number ${flight.flightNumber}, airline, route, and current status in your explanation.
-
-Mission Context:
-- Risk Score: ${body.aiRiskScore || body.score || 0}/100
-- Decision: ${body.aiDecision || body.decision || 'N/A'}
-- Hazards: ${JSON.stringify(body.aiTopRisks || body.topRisks || [])}
-
-Requirements:
-1. Operational Briefing: 2-4 sentences explaining mission safety for THIS SPECIFIC FLIGHT. Mention flight number and status.
-2. Primary Concern: Critical hazard for THIS SPECIFIC MISSION.
-3. Recommended Action: Practical pilot directive.
-4. Directives: 3-5 specific short directives e.g. ["Verify braking", "Monitor GPS"]
-
-Return JSON ONLY:
-{
-  "briefingText": "string",
-  "primaryConcern": "string",
-  "recommendedAction": "string",
-  "directives": ["string"]
-}
-`;
-
-    console.log("[Groq Debug] Prompt preview (first 700 chars):", prompt.slice(0, 700));
-
-    const response = await fetch(
-      `https://api.groq.com/openai/v1/chat/completions`,
-      {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({ 
-          model: model,
-          messages: [
-            {
-              role: "system",
-              content: "You are PhaseGuard AI, an aviation safety analysis engine. Return accurate, concise, flight-specific structured JSON only."
-            },
-            {
-              role: "user",
-              content: prompt
-            }
-          ],
-          temperature: 0.2,
-          response_format: { type: "json_object" }
-        }),
-        signal: controller.signal
-      }
-    );
-
-    if (response.status === 429 && retryCount < 1) {
-      return generateAiBriefing(retryCount + 1);
-    }
-
-    if (!response.ok) {
-      console.error(`[Groq Debug] Groq failed (/api/briefing): Status ${response.status}`);
-      throw new Error(`API status ${response.status}`);
-    }
-    
-    const result = await response.json();
-    const content = result.choices?.[0]?.message?.content || "{}";
-    console.log("[Groq Debug] Groq response preview (first 700 chars):", content.slice(0, 700));
-    
-    const data = JSON.parse(content.trim());
-    
-    // Construct final briefing text from parts if needed
-    const finalBriefing = `${data.briefingText}\n\nPrimary Concern: ${data.primaryConcern}\n\nRecommended Action: ${data.recommendedAction}`;
-    
-    return { briefing: finalBriefing, directives: data.directives || [] };
-  };
 
   try {
-    const { briefing, directives } = await generateAiBriefing(0);
-    clearTimeout(timeoutId);
+    const prompt = `
+You are a senior aviation safety analyst generating a pilot-ready operational briefing.
 
-    return NextResponse.json({
-      success: true,
-      message: "Pilot briefing synchronized",
-      briefing,
-      directives
+STRICT RULES:
+- Output MUST be bullet points only (5–7 bullets).
+- Each bullet must be short, clear, and actionable.
+- NO paragraphs.
+- NO generic language.
+- MUST be specific to this flight.
+- MUST reference real inputs.
+
+======================================================
+FLIGHT CONTEXT
+======================================================
+Flight Number: ${flight.flightNumber || 'TBD'}
+Route: ${flight.departureIata || 'N/A'} → ${flight.arrivalIata || airport.icao || 'N/A'}
+Status: ${factors.flightStatus || 'Active'}
+
+======================================================
+RISK ENGINE OUTPUT (GROUND TRUTH)
+======================================================
+Final Risk Score: ${aiRiskScore}
+Decision: ${aiDecision}
+
+======================================================
+FACTOR BREAKDOWN
+======================================================
+Weather: ${factors.weather || 'Unknown'}
+Traffic: ${factors.traffic || 'Unknown'}
+Runway: ${factors.runway || 'Unknown'}
+Workload: ${factors.workload || 'Unknown'}
+Aircraft: ${factors.aircraft || 'Unknown'}
+Visibility: ${factors.visibility || 'Unknown'}
+Wind: ${factors.wind || 'Unknown'}
+Flight Status Impact: ${factors.flightStatus || 'Unknown'}
+
+======================================================
+TOP RISKS
+======================================================
+${JSON.stringify(aiTopRisks)}
+
+======================================================
+TASK
+======================================================
+
+Generate a pilot briefing in bullet points that includes:
+1. Overall situation (flight + route + decision)
+2. Main risk drivers (top 2–3 factors ONLY)
+3. Operational impact (what could go wrong)
+4. Immediate pilot actions
+5. Monitoring priorities
+6. Final instruction (GO / CAUTION / NO-GO behavior)
+
+======================================================
+FORMAT (STRICT)
+======================================================
+
+- Flight ${flight.flightNumber || 'TBD'} from ${flight.departureIata || 'N/A'} to ${flight.arrivalIata || airport.icao || 'N/A'} is assessed as ${aiDecision} with a risk score of ${aiRiskScore}
+- Primary risk drivers: [factor 1] and [factor 2]
+- Operational impact: [what risk affects]
+- Pilot action: [clear instruction]
+- Monitoring: [what to watch]
+- Final guidance: [clear cockpit instruction]
+
+======================================================
+IMPORTANT
+======================================================
+
+- DO NOT output explanations.
+- DO NOT repeat data.
+- DO NOT say "based on the data".
+- DO NOT be generic.
+- MUST feel like a real cockpit briefing.
+
+RETURN JSON ONLY with keys: "briefing" (string with \n separated bullets) and "directives" (array of strings).
+`;
+
+    const groqResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: model,
+        messages: [
+          { role: "system", content: "You are a senior aviation safety analyst. Return structured JSON only." },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.25,
+        response_format: { type: "json_object" }
+      }),
+      cache: 'no-store'
     });
+
+    const result = await groqResponse.json();
+    const parsed = JSON.parse(result.choices?.[0]?.message?.content || "{}");
+    
+    return NextResponse.json({ ...parsed, requestId }, { 
+      headers: { 
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      } 
+    });
+
   } catch (error: any) {
-    clearTimeout(timeoutId);
-    console.error(`[Groq Debug] Groq failed (/api/briefing):`, error.message);
-    const fallback = generateFallbackBriefing(body);
-    return NextResponse.json({
-      success: true,
-      message: "Pilot briefing synchronized (local fallback)",
-      briefing: fallback.briefing,
-      directives: fallback.directives
+    console.error("[Briefing API] Error:", error);
+    const flightNum = flight?.flightNumber || "Mission";
+    return NextResponse.json({ 
+      requestId,
+      briefing: [
+        `• Flight ${flightNum} — Decision: ${aiDecision || "GO"}`,
+        `• Primary risk: Terminal environment monitoring`,
+        `• Secondary risk: Tactical telemetry awareness`,
+        `• Impact: Maintain awareness of operational margins`,
+        `• Action: Adhere to stabilized approach criteria`,
+        `• Monitor: Continuous runway and weather updates`,
+        `• Guidance: Proceed with standard caution protocols`
+      ].join('\n'), 
+      directives: ["Verify landing data", "Monitor METAR trends"] 
+    }, { 
+      headers: { 
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      } 
     });
   }
-}
-
-function generateFallbackBriefing(body: any) {
-  const { airport, score, level, decision, topRisks, selectedFlight, flightNumber } = body;
-  const flightID = selectedFlight?.flightNumber || flightNumber || "Local Ops";
-  
-  let briefingText = `Operational Briefing:\nMission profile for ${flightID} indicates a ${level || 'Normal'} risk environment with a PhaseGuard score of ${score || 25}.\n\n`;
-  briefingText += `Primary Concern:\n${(topRisks && topRisks[0]) || "Standard approach variables."}. Multi-factor monitoring is advised.\n\n`;
-  briefingText += `Recommended Action:\nMaintain stabilized approach criteria. Execute checklists with high precision.\n\n`;
-  briefingText += `Decision Check:\nThe current PhaseGuard "${decision || 'GO'}" recommendation is validated.`;
-
-  return {
-    briefing: briefingText,
-    directives: [
-      "Verify final approach speed and configuration",
-      "Monitor crosswind components and runway surface",
-      "Prepare for go-around if stabilized criteria not met"
-    ]
-  };
 }

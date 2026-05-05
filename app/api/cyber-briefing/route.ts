@@ -1,146 +1,92 @@
 import { NextResponse } from 'next/server';
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function POST(request: Request) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 12000);
+  const body = await request.json();
+  const { flight = {}, airport = {}, requestId, timestamp, currentRiskScore, top3Risks } = body;
+  
+  console.log(`[Cyber API] NEW REQUEST | ID: ${requestId} | TIME: ${timestamp}`);
 
-    let body: any = {};
-    try {
-      body = await request.json();
-    } catch (e) {
-      console.error('Failed to parse request body:', e);
-    }
+  const apiKey = process.env.GROQ_API_KEY;
+  const model = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
 
-    const flight = body.flight || {};
-    const apiKey = process.env.GROQ_API_KEY;
-    const model = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
-    console.log("--------------------------------------------------");
-    console.log("[Groq Debug] Route: /api/cyber-briefing");
-    console.log(`[Groq Debug] Flight: ${flight.flightNumber} | Status: ${flight.status}`);
-    console.log("[Groq Debug] Key loaded:", !!apiKey);
-    console.log("[Groq Debug] Model used:", model);
-
-    if (!apiKey) {
-      clearTimeout(timeoutId);
-      console.error("[Groq Debug] Groq failed: API key missing");
-      return NextResponse.json({ 
-        success: true,
-        message: "Cyber exposure matrix synchronized",
-        data: generateFallbackCyber(body)
-      });
-    }
-
-    const generateAiCyber = async (retryCount = 0) => {
-      if (retryCount > 0) {
-        console.log(`[Groq Debug] Retry attempt ${retryCount}...`);
-        await new Promise(resolve => setTimeout(resolve, 2000));
+  if (!apiKey) {
+    return NextResponse.json({
+      requestId,
+      data: {
+        level: "Low",
+        score: 15,
+        explanation: "Strategic monitoring active.",
+        actions: ["Maintain standard protocols"],
+        _fallback: true
       }
+    }, { 
+      headers: { 
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      } 
+    });
+  }
 
-      console.log("[Groq Debug] Request sent");
-      const prompt = `
-Analyze the CYBER-OPERATIONAL EXPOSURE for SELECTED FLIGHT SPECIFICALLY: ${flight.flightNumber} (${flight.airline}) from ${flight.departureIata || 'N/A'} to ${flight.arrivalIata || 'N/A'}.
+  try {
+    const prompt = `
+Analyze this exact selected flight and mission context for Cyber-Operational Exposure. Your response must mention the flight number and the airport.
 
-Analyze this specific selected flight and mission context. Do not return generic output. Your response must change based on flight status (${flight.status}), route, airport, weather, runway, traffic, workload, aircraft status, and data confidence.
+MISSION: ${flight.flightNumber || 'TBD'} to ${airport.icao || 'N/A'}
+Computed Physical Risk Context: Score ${currentRiskScore}
+Top Physical Risks: ${JSON.stringify(top3Risks)}
 
-Mission Context:
-- Current Operational Risk Score: ${body.currentRiskScore || 0}
-- Landing Hazards: ${JSON.stringify(body.top3Risks || [])}
-- Flight Status: ${flight.status}
+Determine how physical operational load increases cyber-vulnerability surface for this specific mission.
 
-Requirements:
-1. Determine a level: "Low", "Medium", or "High".
-2. Determine a score (0-100).
-3. Short professional summary (2 sentences max) mentioning the flight number ${flight.flightNumber}.
-4. 2-3 specific operational cyber-awareness actions.
-
-Return JSON ONLY:
+RETURN JSON ONLY:
 {
-  "level": "Low" | "Medium" | "High",
+  "level": "Low | Medium | High",
   "score": number,
-  "summary": "string",
-  "actions": ["string"]
+  "explanation": "string",
+  "actions": ["string", "string"]
 }
 `;
 
-    console.log("[Groq Debug] Prompt preview (first 700 chars):", prompt.slice(0, 700));
-
-    const response = await fetch(
-      `https://api.groq.com/openai/v1/chat/completions`,
-      {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({ 
-          model: model,
-          messages: [
-            {
-              role: "system",
-              content: "You are PhaseGuard AI, an aviation safety analysis engine. Return accurate, concise, flight-specific structured JSON only."
-            },
-            {
-              role: "user",
-              content: prompt
-            }
-          ],
-          temperature: 0.2,
-          response_format: { type: "json_object" }
-        }),
-        signal: controller.signal
-      }
-    );
-
-    if (response.status === 429 && retryCount < 1) {
-      return generateAiCyber(retryCount + 1);
-    }
-
-    if (!response.ok) {
-      console.error(`[Groq Debug] Groq failed (/api/cyber-briefing): Status ${response.status}`);
-      throw new Error(`API status ${response.status}`);
-    }
-    
-    const result = await response.json();
-    const content = result.choices?.[0]?.message?.content || "{}";
-    console.log("[Groq Debug] Groq response preview (first 700 chars):", content.slice(0, 700));
-    
-    return JSON.parse(content.trim());
-  };
-
-  try {
-    const data = await generateAiCyber(0);
-    clearTimeout(timeoutId);
-
-    return NextResponse.json({
-      success: true,
-      message: "Cyber exposure matrix synchronized",
-      data
+    const groqResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: model,
+        messages: [
+          { role: "system", content: "You are PhaseGuard AI, a cyber-operational analyst. Analyze the exact mission context and return structured JSON only." },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.35,
+        response_format: { type: "json_object" }
+      }),
+      cache: 'no-store'
     });
+
+    const result = await groqResponse.json();
+    const parsed = JSON.parse(result.choices?.[0]?.message?.content || "{}");
+    
+    return NextResponse.json({ data: parsed, requestId }, { 
+      headers: { 
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      } 
+    });
+
   } catch (error: any) {
-    clearTimeout(timeoutId);
-    console.error(`[Groq Debug] Groq failed (/api/cyber-briefing):`, error.message);
-    return NextResponse.json({
-      success: true,
-      message: "Cyber exposure matrix synchronized (local fallback)",
-      data: generateFallbackCyber(body)
+    console.error("[Cyber API] Error:", error);
+    return NextResponse.json({ 
+      requestId,
+      data: { level: "Low", score: 10, explanation: "Operational logic validation active.", actions: ["Maintain standard awareness"] }
+    }, { 
+      headers: { 
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      } 
     });
   }
-}
-
-function generateFallbackCyber(body: any) {
-  const score = body.currentRiskScore || 20;
-  const isHighRisk = score > 60;
-  
-  return {
-    level: isHighRisk ? 'Medium' : 'Low',
-    score: isHighRisk ? 45 : 22,
-    summary: isHighRisk 
-      ? 'Elevated mission complexity increases digital dependency. Cyber-operational exposure is monitored.'
-      : 'Standard digital exposure. Systems operating within normal parameters.',
-    actions: [
-      'Verify GNSS integrity against legacy ground-based navaids.',
-      'Monitor for unexplained telemetry or navigation deviations.',
-      'Maintain digital discipline and verify cross-channel data consistency.'
-    ]
-  };
 }

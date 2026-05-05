@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getAirportByIcao } from '../../../lib/airportData';
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const icao = searchParams.get('icao');
@@ -12,11 +15,9 @@ export async function GET(request: Request) {
   const profile = getAirportByIcao(icao);
   if (!profile) {
      return NextResponse.json({
-        source: "FALLBACK",
-        aircraftCount: null,
-        trafficLevel: "Low",
-        message: "Live airspace telemetry unavailable. Baseline traffic density estimation active."
-      });
+        source: "ERROR",
+        message: "Live airspace telemetry unavailable. Airport coordinates missing."
+      }, { status: 404 });
   }
 
   const lomin = profile.longitude - 0.5;
@@ -26,14 +27,12 @@ export async function GET(request: Request) {
   const endpoint = `https://opensky-network.org/api/states/all?lamin=${lamin}&lomin=${lomin}&lamax=${lamax}&lomax=${lomax}`;
   
   try {
-    const response = await fetch(endpoint, { next: { revalidate: 60 } });
+    const response = await fetch(endpoint, { cache: 'no-store' });
     if (!response.ok) {
        return NextResponse.json({
-         source: "FALLBACK",
-         aircraftCount: null,
-         trafficLevel: "Low",
-         message: `Live Airspace API failed with status ${response.status}. Baseline density estimation active.`
-       });
+         source: "ERROR",
+         message: `Live Airspace API failed with status ${response.status}.`
+       }, { status: response.status });
     }
 
     const data = await response.json();
@@ -48,13 +47,15 @@ export async function GET(request: Request) {
        aircraftCount,
        trafficLevel,
        message: "Live traffic density retrieved successfully."
+    }, {
+      headers: {
+        'Cache-Control': 'no-store, max-age=0'
+      }
     });
   } catch (e) {
     return NextResponse.json({
-       source: "FALLBACK",
-       aircraftCount: null,
-       trafficLevel: "Low",
-       message: "Failed to reach Live Airspace API. Baseline density estimation active."
-    });
+       source: "ERROR",
+       message: "Failed to reach Live Airspace API."
+    }, { status: 500 });
   }
 }

@@ -1,6 +1,9 @@
 import { Firestore } from '@google-cloud/firestore'
 import { NextResponse } from 'next/server'
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 // Initialize Firestore with fallback for projectId
 // Note: This uses Server-side SDK which typically requires service account credentials
 const firestore = new Firestore({
