@@ -167,10 +167,11 @@ export default function Home() {
   const getOperationalRecommendation = () => {
     if (aiRiskResult && !aiRiskResult._error) {
       const decision = aiRiskResult.decision || 'CAUTION';
-      let primary = decision;
-      if (decision === 'GO') primary = 'PROCEED_NORMALLY';
-      else if (decision === 'CAUTION') primary = 'PROCEED_WITH_CAUTION';
-      else if (decision === 'HOLD') primary = 'NO-GO_/_HOLD';
+      const primary: string =
+        decision === 'GO' ? 'PROCEED_NORMALLY' :
+        decision === 'CAUTION' ? 'PROCEED_WITH_CAUTION' :
+        decision === 'HOLD' ? 'NO-GO / HOLD' :
+        decision === 'DIVERT' ? 'DIVERT' : 'PROCEED_WITH_CAUTION';
       
       return {
         primaryRecommendation: primary,
@@ -184,14 +185,15 @@ export default function Home() {
     
     if (result) {
       const decision = result.decision || 'CAUTION';
-      let primary = decision;
-      if (decision === 'GO') primary = 'PROCEED_NORMALLY';
-      else if (decision === 'CAUTION') primary = 'PROCEED_WITH_CAUTION';
-      else if (decision === 'HOLD') primary = 'NO-GO_/_HOLD';
+      const primary: string =
+        decision === 'GO' ? 'PROCEED_NORMALLY' :
+        decision === 'CAUTION' ? 'PROCEED_WITH_CAUTION' :
+        decision === 'HOLD' ? 'NO-GO / HOLD' :
+        decision === 'DIVERT' ? 'DIVERT' : 'PROCEED_WITH_CAUTION';
       
       return {
         primaryRecommendation: primary,
-        alternativeRecommendation: result.decision === 'GO' ? 'Monitor conditions' : result.decision === 'CAUTION' ? 'Hold or Divert if conditions worsen' : 'Divert',
+        alternativeRecommendation: decision === 'GO' ? 'Monitor conditions' : decision === 'CAUTION' ? 'Hold or Divert if conditions worsen' : 'Divert',
         operationalReasoning: result.topRisks || [],
         pilotActions: result.recommendations || [],
         dispatcherNotes: [result.explanation || 'Rule-based analysis active.'],
