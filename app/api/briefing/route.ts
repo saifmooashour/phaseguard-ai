@@ -85,33 +85,31 @@ Mission Context:
 
 Risk Analysis Result:
 - Overall Risk Score: ${aiRiskResult?.overallRiskScore || aiRiskScore || score || 'N/A'}/100
-- Category: ${level || 'N/A'}
-- Confidence: ${aiRiskResult?.confidence || aiConfidence || 'N/A'}
 - PhaseGuard Decision: ${operationalRecommendation?.primaryRecommendation || aiRiskResult?.decision || aiDecision || decision || 'N/A'}
 - Top Hazards: ${operationalRecommendation?.operationalReasoning ? operationalRecommendation.operationalReasoning.join(', ') : Array.isArray(aiTopRisks) ? aiTopRisks.join(', ') : Array.isArray(topRisks) ? topRisks.join(', ') : 'N/A'}
-- Initial Actions: ${operationalRecommendation?.pilotActions ? operationalRecommendation.pilotActions.join(', ') : Array.isArray(aiRecommendations) ? aiRecommendations.join(', ') : Array.isArray(recommendations) ? recommendations.join(', ') : 'N/A'}
 
-Format your response as a structured text briefing.
-Return exactly and ONLY the following sections in text:
+Format your response as a structured text briefing. 
+Tone: Professional, direct, aviation-style dispatcher/safety officer notes. No generic AI phrases.
+
+Sections to return:
 
 Operational Briefing:
-[Brief overview of mission safety]
+[A concise but expanded operational explanation (2-4 sentences) of the mission safety status. Explain WHY the decision was made.]
 
 Primary Concern:
-[The single most critical hazard]
+[The single most critical hazard and its operational context.]
 
 Recommended Action:
-[Key pilot directive]
+[Key practical, action-oriented pilot directive.]
 
 Decision Check:
-[Challenge or validate the PhaseGuard decision]
+[Professional validation or caution regarding the PhaseGuard recommendation.]
 
 Directives JSON:
 [A simple JSON array of 3-5 specific, short operational directives for the pilot. e.g. ["Verify braking action", "Monitor GPS integrity"]]
 
 Rules:
-- Professional, aviation-style tone.
-- Total briefing text (excluding JSON) under 100 words.
+- Total briefing text (excluding JSON) under 120 words.
 - Do not use markdown code blocks for the JSON section.
 `;
 

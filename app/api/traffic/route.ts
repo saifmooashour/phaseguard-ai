@@ -15,7 +15,7 @@ export async function GET(request: Request) {
         source: "FALLBACK",
         aircraftCount: null,
         trafficLevel: "Low",
-        message: "Live airspace traffic unavailable. Baseline traffic estimation active."
+        message: "Live airspace telemetry unavailable. Baseline traffic density estimation active."
       });
   }
 
@@ -32,7 +32,7 @@ export async function GET(request: Request) {
          source: "FALLBACK",
          aircraftCount: null,
          trafficLevel: "Low",
-         message: `Live Airspace API failed with status ${response.status}. Baseline estimation active.`
+         message: `Live Airspace API failed with status ${response.status}. Baseline density estimation active.`
        });
     }
 
@@ -54,7 +54,7 @@ export async function GET(request: Request) {
        source: "FALLBACK",
        aircraftCount: null,
        trafficLevel: "Low",
-       message: "Failed to reach Live Airspace API. Baseline estimation active."
+       message: "Failed to reach Live Airspace API. Baseline density estimation active."
     });
   }
 }

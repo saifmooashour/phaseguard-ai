@@ -47,16 +47,37 @@ Rules for Risk Evaluation:
 8. If selected flight status is scheduled/active, do not treat it as risky.
 9. If flight is delayed, unknown, cancelled, or diverted, include operational risk.
 10. Manual runway/workload/aircraft values are valid operational inputs, not fake data.
-11. Recommendations must be operational and pilot-friendly.
+11. Recommendations must be operational, practical, and pilot-friendly.
 12. Do not claim certified aviation authority.
 13. Return JSON only. No markdown formatting blocks.
-14. IMPORTANT: If runway, wind, traffic, and workload are favorable but weather is severe, your explanation must explicitly state: "Operational inputs are otherwise favorable, but live METAR weather is the dominant hazard." Do not imply all factors are risky.
 
-Decision Guidance based on overallRiskScore:
-0–25 = GO
-26–50 = CAUTION
-51–75 = HOLD
-76–100 = DIVERT
+Dispatcher / Operations Notes (explanation field):
+Write a concise but slightly expanded operational explanation of the landing risk.
+- 2–4 sentences max.
+- Explain WHY the decision was made.
+- Mention main risk factors (wet runway, traffic, weather, visibility, wind, workload, aircraft status, or data confidence).
+- Add light operational context on how those factors affect landing stability, braking, rollout control, workload, or situational awareness.
+- Tone: professional dispatcher notes, direct, no fluff, no exaggeration.
+- Decision support style, do not claim certification.
+
+Operational Reasoning (topRisks field):
+- Explain the top 2–3 causes behind the decision.
+- Keep it concise and operational.
+- Avoid generic phrases like "baseline operational awareness" unless there are truly no risks.
+
+Pilot Actions (recommendations field):
+- Practical, clear, and action-oriented.
+- Example style: "Maintain stable approach profile.", "Monitor braking effectiveness during rollout.", "Verify updated weather and runway condition reports."
+
+Primary Recommendation (decision field):
+- GO: 0-25
+- CAUTION: 26-50
+- HOLD: 51-75
+- DIVERT: 76-100
+
+Alternative (alternative field):
+- Provide a realistic alternative action based on the decision.
+- Should not be empty or vague.
 
 Return EXACTLY and ONLY the following JSON structure without any markdown blocks:
 {
@@ -78,7 +99,8 @@ Return EXACTLY and ONLY the following JSON structure without any markdown blocks
   "compoundingFactors": ["string"],
   "missingDataWarnings": ["string"],
   "recommendations": ["string"],
-  "explanation": "string"
+  "explanation": "string",
+  "alternative": "string"
 }
 `;
 
@@ -226,11 +248,12 @@ function generateFallbackData(body: any) {
     compoundingFactors: score > 60 ? ["Multi-factor risk elevation detected."] : [],
     missingDataWarnings: [], // Removed 'AI analysis offline'
     recommendations: [
-      "Maintain standard operational awareness.",
-      "Execute checklists with heightened precision.",
-      score > 50 ? "Consider secondary arrival options." : "Monitor for trend degradation."
+      "Maintain stabilized approach profile.",
+      "Monitor braking effectiveness during rollout.",
+      score > 50 ? "Verify secondary arrival or diversion options." : "Monitor for environmental trend degradation."
     ],
-    explanation: `Mission synthesis complete. Primary risk drivers identified: ${risks.join(', ') || 'None identified'}. Operational decision remains ${decision}.`
+    explanation: `Mission analysis indicates a ${decision.toLowerCase()}-risk landing scenario primarily driven by ${risks.join(', ') || 'standard variables'}. While parameters remain within limits, active risk factors may affect landing stability or workload. Operational caution is advised regarding primary hazards.`,
+    alternative: decision === 'GO' ? "Monitor live weather for any trend degradation." : (decision === 'CAUTION' ? "Hold to wait for improving conditions or reassess arrival priority." : "Divert to planned alternate or hold until conditions normalize.")
   };
 }
 

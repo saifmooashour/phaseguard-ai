@@ -264,12 +264,12 @@ export function calculateRisk(params: RiskParams): RiskResult {
     }
   }
 
-  let summary = 'Conditions are favorable for a standard approach.'
-  if (level === 'Critical') summary = 'Severe hazards detected. Immediate diversion recommended.'
-  else if (level === 'High') summary = 'Significant risks present. Heightened crew awareness and possible holding required.'
-  else if (level === 'Medium') summary = 'Moderate challenges exist. Adhere strictly to SOPs and exercise caution.'
+  let summary = 'Operational environment is favorable for standard arrival procedures.'
+  if (level === 'Critical') summary = 'Severe risk saturation detected. Immediate diversion is recommended to maintain safety margins.'
+  else if (level === 'High') summary = 'Significant risk factors identified. Enhanced crew monitoring and potential holding procedures are advised.'
+  else if (level === 'Medium') summary = 'Moderate operational challenges exist. Adhere strictly to stabilized approach criteria and maintain heightened awareness.'
   else if (level === 'Low' && confidence !== 'Low') {
-    summary = 'Low risk because live/current inputs do not indicate elevated hazards.'
+    summary = 'Low-risk profile maintained based on current environmental and operational telemetry.'
   }
 
   let explanation = summary;

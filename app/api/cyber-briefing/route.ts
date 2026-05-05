@@ -34,7 +34,7 @@ export async function POST(request: Request) {
     }
 
     const prompt = `
-You are a cybersecurity expert specializing in aviation operational technology (OT) and digital threat assessments.
+You are a cybersecurity expert specializing in aviation operational technology (OT) and digital threat assessments for PhaseGuard AI.
 Evaluate the "Cyber-Operational Exposure" for the flight crew using the following real-time mission context.
 
 Mission Context:
@@ -47,16 +47,16 @@ Mission Context:
 - Current Operational Risk Score: ${JSON.stringify(body.currentRiskScore || 0)}
 - Top 3 Landing Risks: ${JSON.stringify(body.top3Risks || [])}
 
-Rules for Evaluation:
-1. Cyber-Operational Exposure represents the likelihood and impact of operational disruption via cyber-physical or digital vectors (e.g., GPS spoofing, automated navigation disruptions, degraded telemetry feeds).
-2. Complex scenarios (e.g., high traffic, contaminated runways, low visibility, high workload) elevate cyber vulnerability as crews rely more heavily on digital decision support.
+Requirements:
+1. Cyber-Operational Exposure represents the risk of operational disruption via digital vectors (GPS spoofing, navigation interference, telemetry anomalies).
+2. Complex environments (high traffic, low visibility, high workload) elevate vulnerability as digital dependency increases.
 3. Determine a level: "Low", "Medium", or "High".
 4. Determine a score from 0 to 100.
-5. Provide a short, actionable summary (explanation).
-6. Provide 2 or 3 recommended cyber-awareness actions for the flight crew.
+5. Provide a short, actionable, and professional summary (2 sentences max).
+6. Provide 2 or 3 specific, operational cyber-awareness actions.
+7. Tone: Senior aviation consultant, direct, no fluff, no AI-isms.
 
-You MUST return EXACTLY a JSON object. No markdown formatting. No extra words.
-Expected JSON Structure:
+You MUST return EXACTLY a JSON object without markdown blocks.
 {
   "level": "Low" | "Medium" | "High",
   "score": number,
@@ -153,12 +153,12 @@ function generateFallbackCyber(body: any) {
     level: isHighRisk ? 'Medium' : 'Low',
     score: isHighRisk ? 45 : 22,
     summary: isHighRisk 
-      ? 'Elevated mission complexity increases digital dependency. Cyber-physical vectors (GPS/Nav) should be monitored for anomalies during high-workload phases.'
-      : 'Baseline digital exposure. Systems operating within normal parameters with standard cybersecurity overhead.',
+      ? 'Elevated mission complexity increases digital dependency. Cyber-operational exposure is heightened due to increased reliance on automated navigation and telemetry systems.'
+      : 'Standard digital exposure. Systems operating within normal parameters with routine cybersecurity monitoring.',
     actions: [
-      'Verify GNSS integrity against ground-based navaids.',
-      'Monitor for unexplained telemetry deviations.',
-      'Maintain "dark-cockpit" digital discipline.'
+      'Verify GNSS integrity against legacy ground-based navaids.',
+      'Monitor for unexplained telemetry or navigation deviations.',
+      'Maintain digital discipline and verify cross-channel data consistency.'
     ]
   };
 }

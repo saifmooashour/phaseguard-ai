@@ -31,16 +31,17 @@ export async function POST(request: Request) {
 
     const prompt = `
 You are an expert aviation risk evaluator for PhaseGuard AI.
-You need to generate the top 3 landing hazards for the current scenario.
+You need to generate the top 3 landing hazards (Operational Reasoning) for the current scenario.
 
 Data Context:
 ${JSON.stringify(body, null, 2)}
 
 Requirements:
 1. Return exactly 3 risks.
-2. Aviation-focused, specific, concise, and actionable.
-3. Not generic. Map explicitly to inputs like weather, workload, or aircraft condition.
-4. Return ONLY the following JSON structure without markdown formatting blocks:
+2. Aviation-focused, specific, concise, and operational.
+3. Explain the top causes behind the decision.
+4. Avoid generic phrases like "baseline operational awareness" unless there are truly no risks.
+5. Return ONLY the following JSON structure without markdown formatting blocks:
 {
   "risks": [
     "string",
@@ -153,15 +154,15 @@ function generateFallbackRisks(body: any): string[] {
     risks.push(`Adverse local METAR weather presenting active ${weatherCondition.toLowerCase()} hazards.`);
   }
 
-  // Pad to 3 risks
+  // Pad to 3 risks with more professional operational context
   if (risks.length < 3) {
-    risks.push("Elevated baseline operational oversight limits.");
+    risks.push("Environmental trend monitoring active.");
   }
   if (risks.length < 3) {
-    risks.push("Cockpit integration metrics tracking continuous telemetry.");
+    risks.push("Arrival phase telemetry tracking.");
   }
   if (risks.length < 3) {
-    risks.push("Active safety vector monitoring.");
+    risks.push("Stabilized approach criteria verification.");
   }
 
   return risks.slice(0, 3);

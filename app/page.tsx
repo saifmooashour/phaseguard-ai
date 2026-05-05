@@ -165,21 +165,41 @@ export default function Home() {
   }, [mapLoaded, airportProfile, selectedFlight, appScreen]);
 
   const getOperationalRecommendation = () => {
-    return aiRiskResult && !aiRiskResult._error ? {
-      primaryRecommendation: aiRiskResult.decision === 'CAUTION' ? 'PROCEED_WITH_CAUTION' : aiRiskResult.decision,
-      alternativeRecommendation: aiRiskResult.decision === 'GO' ? 'Monitor conditions' : aiRiskResult.decision === 'CAUTION' ? 'Hold or Divert if conditions worsen' : 'Divert',
-      operationalReasoning: aiRiskResult.topRisks || [],
-      pilotActions: aiRiskResult.recommendations || [],
-      dispatcherNotes: aiRiskResult.explanation ? [aiRiskResult.explanation] : [],
-      missingDataWarnings: aiRiskResult.missingDataWarnings || []
-    } : result ? {
-      primaryRecommendation: result.decision === 'CAUTION' ? 'PROCEED_WITH_CAUTION' : result.decision,
-      alternativeRecommendation: result.decision === 'GO' ? 'Monitor conditions' : result.decision === 'CAUTION' ? 'Hold or Divert if conditions worsen' : 'Divert',
-      operationalReasoning: result.topRisks || [],
-      pilotActions: result.recommendations || [],
-      dispatcherNotes: [result.explanation || 'Rule-based analysis active.'],
-      missingDataWarnings: []
-    } : null;
+    if (aiRiskResult && !aiRiskResult._error) {
+      const decision = aiRiskResult.decision || 'CAUTION';
+      let primary = decision;
+      if (decision === 'GO') primary = 'PROCEED_NORMALLY';
+      else if (decision === 'CAUTION') primary = 'PROCEED_WITH_CAUTION';
+      else if (decision === 'HOLD') primary = 'NO-GO_/_HOLD';
+      
+      return {
+        primaryRecommendation: primary,
+        alternativeRecommendation: aiRiskResult.alternative || (decision === 'GO' ? 'Monitor conditions' : decision === 'CAUTION' ? 'Hold or Divert if conditions worsen' : 'Divert'),
+        operationalReasoning: aiRiskResult.topRisks || [],
+        pilotActions: aiRiskResult.recommendations || [],
+        dispatcherNotes: aiRiskResult.explanation ? [aiRiskResult.explanation] : [],
+        missingDataWarnings: aiRiskResult.missingDataWarnings || []
+      };
+    }
+    
+    if (result) {
+      const decision = result.decision || 'CAUTION';
+      let primary = decision;
+      if (decision === 'GO') primary = 'PROCEED_NORMALLY';
+      else if (decision === 'CAUTION') primary = 'PROCEED_WITH_CAUTION';
+      else if (decision === 'HOLD') primary = 'NO-GO_/_HOLD';
+      
+      return {
+        primaryRecommendation: primary,
+        alternativeRecommendation: result.decision === 'GO' ? 'Monitor conditions' : result.decision === 'CAUTION' ? 'Hold or Divert if conditions worsen' : 'Divert',
+        operationalReasoning: result.topRisks || [],
+        pilotActions: result.recommendations || [],
+        dispatcherNotes: [result.explanation || 'Rule-based analysis active.'],
+        missingDataWarnings: []
+      };
+    }
+    
+    return null;
   };
 
   useEffect(() => {
@@ -798,26 +818,26 @@ export default function Home() {
 
   const getTop3Risks = () => {
     const risks: string[] = [];
-    if (runway === 'Wet') risks.push("Wet runway may increase landing distance.");
-    if (runway === 'Contaminated') risks.push("Contaminated runway poses severe braking action risk.");
-    if (traffic === 'High') risks.push("High traffic density requires additional decision support.");
-    if (traffic === 'Medium') risks.push("Elevated traffic requires tighter approach spacing.");
-    if (workload === 'High') risks.push("High crew workload increases the chance of missed cues.");
-    if (workload === 'Medium') risks.push("Increased crew workload reduces task management reserves.");
-    if (aircraft === 'Minor Issue') risks.push("Minor aircraft issue requires additional monitoring.");
-    if (visibilityCategory === 'Low') risks.push("Low visibility may affect final approach stability.");
-    if (visibilityCategory === 'Reduced') risks.push("Reduced visibility requires heightened visual awareness.");
-    if (windCategory === 'Strong') risks.push("Strong winds increase dynamic handling difficulty.");
-    if (windCategory === 'Moderate') risks.push("Moderate winds may induce minor approach turbulence.");
-    if (weatherCondition === 'Storm') risks.push("Severe weather/storm conditions threaten microburst or shear events.");
-    if (weatherCondition === 'Rain') risks.push("Active precipitation affects runway friction and visual tracking.");
+    if (runway === 'Wet') risks.push("Reduced braking action potential on wet surface.");
+    if (runway === 'Contaminated') risks.push("Contaminated runway surface poses severe deceleration hazards.");
+    if (traffic === 'High') risks.push("High traffic density environment requires enhanced spacing awareness.");
+    if (traffic === 'Medium') risks.push("Moderate traffic levels increasing arrival phase complexity.");
+    if (workload === 'High') risks.push("High task saturation risk detected in current profile.");
+    if (workload === 'Medium') risks.push("Elevated crew workload reducing task management reserves.");
+    if (aircraft === 'Minor Issue') risks.push("Systems redundancy alert regarding aircraft status.");
+    if (visibilityCategory === 'Low') risks.push("Low visibility conditions necessitating precision approach monitoring.");
+    if (visibilityCategory === 'Reduced') risks.push("Reduced visual cues requiring heightened situational awareness.");
+    if (windCategory === 'Strong') risks.push("Elevated crosswind components scaling handling requirements.");
+    if (windCategory === 'Moderate') risks.push("Moderate wind shear potential during final approach.");
+    if (weatherCondition === 'Storm') risks.push("Active convective activity posing significant arrival hazards.");
+    if (weatherCondition === 'Rain') risks.push("Active precipitation affecting surface friction and visual tracking.");
 
     const defaultRisks = [
-      "Maintain sterile cockpit procedures below 10,000 feet.",
-      "Review missed approach and go-around procedures.",
-      "Ensure stable approach criteria are continuously monitored.",
-      "Monitor fuel reserves and potential holding delays.",
-      "Cross-check navigation aids and landing performance data."
+      "Maintain sterile cockpit procedures below terminal altitudes.",
+      "Review missed approach and go-around procedures for current conditions.",
+      "Verify stabilized approach criteria throughout the arrival phase.",
+      "Monitor fuel reserves against potential holding requirements.",
+      "Cross-check landing performance data with real-time telemetry."
     ];
 
     while (risks.length < 3) {
@@ -825,7 +845,7 @@ export default function Home() {
       if (nextDefault) {
         risks.push(nextDefault);
       } else {
-        risks.push("Standard operational risks apply.");
+        risks.push("Baseline operational safety monitoring.");
       }
     }
     return risks.slice(0, 3);
@@ -1347,7 +1367,7 @@ export default function Home() {
                               const currentLevel = aiRiskResult && !aiRiskResult._error ? (aiRiskResult.decision === 'DIVERT' ? 'Critical' : aiRiskResult.decision === 'HOLD' ? 'High' : aiRiskResult.decision === 'CAUTION' ? 'Medium' : 'Low') : result.level;
                               const currentDecision = aiRiskResult && !aiRiskResult._error ? aiRiskResult.decision : result.decision;
                               const currentRisks = getTop3Risks().join(', ');
-                              const currentAction = operationalRecommendation?.primaryRecommendation.replace(/_/g, ' ') || 'Monitor conditions';
+                              const currentAction = (operationalRecommendation?.primaryRecommendation || 'PROCEED_NORMALLY').replace(/_/g, ' ');
 
                               const text = `Landing Risk Briefing. The current risk score is ${currentScore}, categorized as ${currentLevel} risk. Top 3 hazards identified are: ${currentRisks}. Final recommended action: ${currentAction}.`;
                               speakText(text);
@@ -1379,7 +1399,7 @@ export default function Home() {
                       <div className="bg-slate-900/70 p-4 rounded-xl border border-slate-800/60 shadow-inner">
                         <div className="flex justify-between items-center mb-2">
                           <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Primary Recommendation</div>
-                          <div className={`text-lg font-black uppercase tracking-widest ${operationalRecommendation.primaryRecommendation === 'DIVERT' ? 'text-red-500' : operationalRecommendation.primaryRecommendation === 'HOLD' ? 'text-orange-500' : operationalRecommendation.primaryRecommendation === 'PROCEED_WITH_CAUTION' ? 'text-yellow-500' : 'text-green-500'}`}>
+                          <div className={`text-lg font-black uppercase tracking-widest ${operationalRecommendation.primaryRecommendation.includes('DIVERT') ? 'text-red-500' : operationalRecommendation.primaryRecommendation.includes('HOLD') ? 'text-orange-500' : operationalRecommendation.primaryRecommendation.includes('CAUTION') ? 'text-yellow-500' : 'text-green-500'}`}>
                             {operationalRecommendation.primaryRecommendation.replace(/_/g, ' ')}
                           </div>
                         </div>
