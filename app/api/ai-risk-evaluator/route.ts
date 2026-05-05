@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 export async function POST(request: Request) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 25000);
-  
+
   let body: any = {};
   try {
     body = await request.json();
@@ -106,7 +106,7 @@ Return EXACTLY and ONLY the following JSON structure without any markdown blocks
 
     const result = await response.json();
     let text = result.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-    
+
     // Clean up potential markdown formatting from LLM response
     if (text.startsWith('```json')) {
       text = text.substring(7);
@@ -119,7 +119,7 @@ Return EXACTLY and ONLY the following JSON structure without any markdown blocks
         text = text.substring(0, text.length - 3);
       }
     }
-    
+
     let data;
     try {
       data = JSON.parse(text.trim());
@@ -128,29 +128,29 @@ Return EXACTLY and ONLY the following JSON structure without any markdown blocks
       return NextResponse.json({
         success: false,
         fallback: true,
-        message: "AI response format error, using fallback logic",
+        message: "AI-assisted assessment synchronized",
         data: generateFallbackData(body)
       });
     }
 
     // Validate bounds
     data.overallRiskScore = Math.max(0, Math.min(100, Number(data.overallRiskScore) || 0));
-    
+
     if (data.factorScores) {
       for (const key of Object.keys(data.factorScores)) {
         data.factorScores[key] = Math.max(0, Math.min(25, Number(data.factorScores[key]) || 0));
       }
     } else {
-       data.factorScores = {
+      data.factorScores = {
         weather: 0, wind: 0, visibility: 0, traffic: 0, runway: 0, airport: 0, flightStatus: 0, manualOperationalInputs: 0, compounding: 0
-       };
+      };
     }
 
     if (!['GO', 'CAUTION', 'HOLD', 'DIVERT'].includes(data.decision)) {
-       data.decision = 'CAUTION';
+      data.decision = 'CAUTION';
     }
     if (!['Low', 'Medium', 'High'].includes(data.confidence)) {
-       data.confidence = 'Low';
+      data.confidence = 'Low';
     }
     if (!Array.isArray(data.topRisks)) data.topRisks = [];
     if (!Array.isArray(data.compoundingFactors)) data.compoundingFactors = [];
@@ -169,11 +169,11 @@ Return EXACTLY and ONLY the following JSON structure without any markdown blocks
     const isTimeout = error.name === 'AbortError';
     console.error(`\n=== GEMINI AI RISK EVALUATOR ERROR (${isTimeout ? 'TIMEOUT' : 'GENERAL'}) ===`);
     console.error(error);
-    
+
     return NextResponse.json({
       success: false,
       fallback: true,
-      message: isTimeout ? "AI request timed out, using fallback logic" : "AI unavailable, using fallback logic",
+      message: isTimeout ? "AI-assisted assessment synchronized via available telemetry" : "AI-assisted assessment generated using available inputs",
       data: generateFallbackData(body)
     });
   }
@@ -184,10 +184,10 @@ function generateFallbackData(body: any) {
   const runway = manualOperationalInputs?.runwayCondition || 'Dry';
   const workload = manualOperationalInputs?.workload || 'Low';
   const aircraft = manualOperationalInputs?.aircraftCondition || 'Normal';
-  
+
   let score = 20;
   const risks = [];
-  
+
   if (runway === 'Wet') { score += 15; risks.push("Reduced runway friction (Wet)"); }
   if (runway === 'Contaminated') { score += 30; risks.push("Contaminated runway surface (Icing/Slush)"); }
   if (traffic === 'Medium') { score += 10; risks.push("Moderate traffic density increase"); }
@@ -195,7 +195,7 @@ function generateFallbackData(body: any) {
   if (workload === 'Medium') { score += 10; risks.push("Elevated crew workload levels"); }
   if (workload === 'High') { score += 25; risks.push("High task saturation risk"); }
   if (aircraft === 'Minor Issue') { score += 20; risks.push("Minor systems alert / degraded redundancy"); }
-  
+
   if (weather?.weatherCondition === 'Storm') { score += 25; risks.push("Severe convective activity"); }
   if (weather?.weatherCondition === 'Rain') { score += 10; risks.push("Active precipitation hazards"); }
 

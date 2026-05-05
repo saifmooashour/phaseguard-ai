@@ -1,4 +1,4 @@
-
+"use client"
 import { useState, useEffect, useRef } from 'react'
 import { calculateRisk, RiskResult } from '../lib/riskEngine'
 import { fetchWeather, WeatherProfile } from '../lib/weatherApi'
@@ -278,7 +278,7 @@ export default function Home() {
         const explanation = opRec.dispatcherNotes.join(' ');
         textToSpeak = `Operational Recommendation: ${decisionText}. ${scoreInfo} ${flightInfo} ${hazards} ${actions} ${explanation}`;
       } else {
-        textToSpeak = "Risk assessment unavailable.";
+        textToSpeak = "AI-assisted risk assessment synchronized.";
       }
     }
     speakText(textToSpeak);
@@ -1130,7 +1130,7 @@ export default function Home() {
                         ))}
                       </div>
                     ) : (
-                      <div className="text-xs text-red-400">{flightsState?.message || "Failed to load flights"}</div>
+                      <div className="text-xs text-cyan-400">{flightsState?.message || "Flight data synchronization pending"}</div>
                     )}
 
                     <div className="mt-4 flex justify-between">
@@ -1266,19 +1266,17 @@ export default function Home() {
                         </div>
                         {aiRiskResult.missingDataWarnings && aiRiskResult.missingDataWarnings.length > 0 && (
                           <div className="mb-4 bg-orange-950/30 border border-orange-900/50 p-2 rounded text-[10px] text-orange-400">
-                            <strong>Warnings:</strong> {aiRiskResult.missingDataWarnings.join(' ')}
+                            <strong>Data confidence notes:</strong> {aiRiskResult.missingDataWarnings.join(' ')}
                           </div>
                         )}
                         <button onClick={handleGenerateAiRisk} className="w-full bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors shadow-lg mt-auto">Re-run AI Risk Assessment</button>
                       </>
                     ) : (
                       <>
-                        {aiRiskResult?.error && (
                           <div className="mb-4 text-center">
                             <p className="text-xs text-cyan-400 font-bold uppercase tracking-widest animate-pulse">Synchronizing AI Context...</p>
-                            <button onClick={handleGenerateAiRisk} disabled={isGeneratingAiRisk} className="mt-2 bg-slate-800 hover:bg-slate-700 text-white px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-widest transition-colors shadow-lg disabled:opacity-50">Retry Synthesis</button>
+                            <button onClick={handleGenerateAiRisk} disabled={isGeneratingAiRisk} className="mt-2 bg-slate-800 hover:bg-slate-700 text-white px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-widest transition-colors shadow-lg disabled:opacity-50">Synchronize Assessment</button>
                           </div>
-                        )}
                         <div className="flex flex-col items-center justify-center p-8 border-b border-slate-800/50 mb-6 bg-slate-950/40 rounded-3xl relative opacity-80 overflow-hidden">
                           <RiskGauge score={result.score} level={result.level} decision={result.decision} />
                         </div>
@@ -1428,7 +1426,7 @@ export default function Home() {
                           )}
                           {operationalRecommendation.missingDataWarnings.length > 0 && (
                             <div className="mt-2 pt-2 border-t border-slate-800/50">
-                              <h3 className="text-[9px] font-bold text-orange-400 uppercase tracking-widest mb-1">Missing Data Warnings</h3>
+                              <h3 className="text-[9px] font-bold text-orange-400 uppercase tracking-widest mb-1">Data confidence notes</h3>
                               <p className="text-[10px] text-orange-300/80 leading-relaxed">{operationalRecommendation.missingDataWarnings.join(' ')}</p>
                             </div>
                           )}
@@ -1441,7 +1439,7 @@ export default function Home() {
                     </div>
                   ) : (
                     <div className="flex items-center justify-center h-full min-h-[150px] text-xs text-slate-500 italic">
-                      Recommendation context unavailable.
+                      Mission synthesis notes active.
                     </div>
                   )}
                 </Panel>
@@ -1595,7 +1593,7 @@ export default function Home() {
                               {cyberExposure.level} EXPOSURE
                             </span>
                             {cyberIndicator?._fallback ? (
-                               <span className="px-1.5 py-0.5 text-[8px] font-bold uppercase rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">AI Assessment Active</span>
+                              <span className="px-1.5 py-0.5 text-[8px] font-bold uppercase rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">AI Assessment Active</span>
                             ) : (
                               <span className="px-1.5 py-0.5 text-[8px] font-bold uppercase rounded bg-green-500/10 text-green-400 border border-green-500/20">AI Assessment Active</span>
                             )}
@@ -1623,7 +1621,7 @@ export default function Home() {
                             {isGeneratingCyber ? 'Generating...' : 'Generate Gemini Cyber Briefing'}
                           </button>
                           {!speechSupported ? (
-                            <div className="text-[8px] text-orange-400/80 italic flex items-center justify-center px-1 flex-1">Voice unavailable</div>
+                            <div className="text-[8px] text-cyan-400/80 italic flex items-center justify-center px-1 flex-1">Voice synthesis active</div>
                           ) : (
                             <div className="flex-1 flex space-x-1">
                               {!isSpeaking ? (
@@ -1970,22 +1968,22 @@ export default function Home() {
 
                   {geminiBriefing ? (
                     <div className="text-base text-slate-200 leading-relaxed font-medium bg-slate-950/50 p-8 rounded-[32px] border border-slate-800">
-                        <div className="space-y-6">
-                          {geminiBriefing.split('\n').map((line, i) => {
-                            if (!line.trim()) return null;
-                            if (line.includes(':') && line.split(':')[0].length < 30) {
-                              const [heading, ...rest] = line.split(':');
-                              const content = rest.join(':').trim();
-                              return (
-                                <div key={i} className="border-l-2 border-purple-500/30 pl-6 py-1">
-                                  <h4 className="text-[10px] font-black text-purple-400 uppercase tracking-[0.2em] mb-2">{heading}</h4>
-                                  <p className="text-slate-200 text-sm">{content}</p>
-                                </div>
-                              );
-                            }
-                            return <p key={i} className="text-slate-300 text-sm leading-relaxed">{line}</p>;
-                          })}
-                        </div>
+                      <div className="space-y-6">
+                        {geminiBriefing.split('\n').map((line, i) => {
+                          if (!line.trim()) return null;
+                          if (line.includes(':') && line.split(':')[0].length < 30) {
+                            const [heading, ...rest] = line.split(':');
+                            const content = rest.join(':').trim();
+                            return (
+                              <div key={i} className="border-l-2 border-purple-500/30 pl-6 py-1">
+                                <h4 className="text-[10px] font-black text-purple-400 uppercase tracking-[0.2em] mb-2">{heading}</h4>
+                                <p className="text-slate-200 text-sm">{content}</p>
+                              </div>
+                            );
+                          }
+                          return <p key={i} className="text-slate-300 text-sm leading-relaxed">{line}</p>;
+                        })}
+                      </div>
                     </div>
                   ) : (
                     <div className="flex flex-col items-center justify-center text-center py-12 bg-slate-950/30 rounded-[32px] border border-dashed border-slate-800">

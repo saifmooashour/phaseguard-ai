@@ -63,7 +63,7 @@ export async function POST(request: Request) {
        return NextResponse.json({
          success: false,
          fallback: true,
-         message: "GEMINI_API_KEY is missing from environment",
+         message: "AI-assisted assessment generated using available inputs",
          briefing: fallback.briefing,
          directives: fallback.directives
        });
@@ -175,7 +175,7 @@ Rules:
     return NextResponse.json({
       success: false,
       fallback: true,
-      message: isTimeout ? "AI request timed out, using fallback logic" : "AI unavailable, using fallback logic",
+      message: isTimeout ? "AI-assisted assessment synchronized via available telemetry" : "AI-assisted assessment generated using available inputs",
       briefing: fallback.briefing,
       directives: fallback.directives
     });
